@@ -196,14 +196,14 @@ class Settings:
         delta = {}
         defaults = self.defaults
         
-        for key, value in dictionary_representation.items():
+        for key, value in self.dictionary_representation.items():
             if key == "tank_pressure_sensor":
                 delta[key] = self.tank_pressure.delta
             elif key == "line_pressure_sensor":
                 delta[key] = self.line_pressure.delta
             else:
-                if defaults[key] != value[key]:
-                    delta[key] = value[key]
+                if defaults[key] != value:
+                    delta[key] = value
                     
         return delta
 
@@ -675,6 +675,17 @@ class CompressorServer(Server):
         compressor = self.compressor
             
         if request_type == 'GET':
+            if endpoint == '/settings':
+                if len(parameters) > 0:
+                    try:
+                        self.settings.update(parameters)
+                        self.settings.write_delta()
+                        
+                        self.return_json(writer, self.settings.dictionary_representation)
+                    except KeyError as e:
+                        self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
+                else:
+                    self.return_json(writer, self.settings.dictionary_representation)
             if len(parameters) > 0:
                 self.return_json(writer, {'result':'unexpected parameters'}, 400)
             elif endpoint == '/':
@@ -693,8 +704,6 @@ class CompressorServer(Server):
                 writer.write('{"state":[')
                 compressor.state_log.dump(writer, parameters.get('since', 0))
                 writer.write(']}')
-            elif endpoint == '/settings':
-                self.return_json(writer, self.settings.dictionary_representation)
             elif endpoint == '/run':
                 compressor.request_run()
                 self.return_ok(writer)
@@ -713,16 +722,7 @@ class CompressorServer(Server):
             else:
                 self.return_json(writer, {'result':'unknown endpoint'}, 404)
         elif request_type == 'PUT':
-            if endpoint == '/settings':
-                try:
-                    self.settings.update(parameters)
-                    self.settings.write_delta()
-                    
-                    self.return_json(writer, self.settings.dictionary_representation)
-                except KeyError as e:
-                    self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
-            else:
-                self.return_json(writer, {'result':'unknown endpoint'}, 404)
+            self.return_json(writer, {'result':'unknown endpoint'}, 404)
         else:
             self.return_json(writer, {'result':'unknown method'}, 404)
             
