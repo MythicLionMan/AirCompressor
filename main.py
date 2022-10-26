@@ -18,6 +18,7 @@ default_settings = {
     "max_duty": 0.6,
     "duty_duration": 10*60,
     "drain_duration": 10,
+    "recovery_time": 3*60,
     "drain_delay": 5,
     "compressor_on_power_up": True,
     "auto_stop_time": 6*60*60,
@@ -68,6 +69,7 @@ html_status = """<!DOCTYPE html>
             <tr><td>Active</td><td>{active}</td></tr>
             <tr><td>State</td><td>{state}</td></tr>
             <tr><td>Shutdown</td><td>{shutdown}</td></tr>
+            <tr><td>Duty Recovery Time</td><td>{duty_recovery_time}</td></tr>
             <tr><td>Duty 10 Minutes</td><td>{duty_10}</td></tr>
             <tr><td>Duty 60 Minutes</td><td>{duty_60}</td></tr>
         </table>
@@ -77,6 +79,7 @@ html_status = """<!DOCTYPE html>
             <tr><td>Stop Pressure</td><td>{stop_pressure}</td></tr>
             <tr><td>Max Duty</td><td>{max_duty}</td></tr>
             <tr><td>Duty Duration</td><td>{duty_duration}</td></tr>
+            <tr><td>Recovery Time</td><td>{recovery_time}</td></tr>
             <tr><td>Drain Duration</td><td>{drain_duration}</td></tr>
             <tr><td>Drain Delay</td><td>{drain_delay}</td></tr>
             <tr><td>Compressor On Power Up</td><td>{compressor_on_power_up}</td></tr>
@@ -110,6 +113,17 @@ class ValueScale:
             "sensor_min": self.sensor_min,
             "sensor_max": self.sensor_max
         }
+    
+    @property
+    def delta(self):
+        delta = {}
+        defaults = self.defaults
+        
+        for key, value in self.dictionary_representation.items():
+            if defaults[key] != value:
+                delta[key] = value
+                                    
+        return delta
         
     # Updates the values of self using a dictionary, and returns the values that are
     # not the same as the defaults
@@ -135,16 +149,23 @@ class ValueScale:
 
         return delta
         
+# Settings manages persistent settings, and attempts to minimize the amount
+# of data that must be written. When settings are persisted they are written
+# to a JSON file that contains only the settings that are different than the
+# default values. Not only does this minimize Flash RAM erases, it also allows
+# the default values to be updated in the future without being overwritten by
+# saved settings.
 class Settings:
-    def __init__(self, defaults):
+    def __init__(self, defaults, persist_path = 'settings.json'):
         self.defaults = defaults
-        self.persist_path = 'settings.json'
+        self.persist_path = persist_path
         
         # Create the ValueScale settings
         self.tank_pressure = ValueScale(defaults["tank_pressure_sensor"])
         self.line_pressure = ValueScale(defaults["line_pressure_sensor"])
                 
-        # Read the saved settings. This will populate all of the properties of self
+        # Read the saved settings. This will populate the properties of self
+        # even if there are no saved settings
         self._read()
         
     @property
@@ -154,6 +175,7 @@ class Settings:
             "stop_pressure": self.stop_pressure,
             "max_duty": self.max_duty,
             "duty_duration": self.duty_duration,
+            "recovery_time": self.recovery_time,
             "drain_duration": self.drain_duration,
             "drain_delay": self.drain_delay,
             "compressor_on_power_up": self.compressor_on_power_up,
@@ -167,30 +189,44 @@ class Settings:
             "tank_pressure_sensor": self.tank_pressure.dictionary_representation,
             "line_pressure_sensor": self.line_pressure.dictionary_representation
         }
+
+    # Returns a dictionary of the keys of self that are different from the default values
+    @property
+    def delta(self):
+        delta = {}
+        defaults = self.defaults
         
-    # Updates the settings of self with values in a dictionary and writes the updated
-    # values to permanent storage
-    def update(self, values):
-        delta = ujson.dumps(self._update(values))
+        for key, value in dictionary_representation.items():
+            if key == "tank_pressure_sensor":
+                delta[key] = self.tank_pressure.delta
+            elif key == "line_pressure_sensor":
+                delta[key] = self.line_pressure.delta
+            else:
+                if defaults[key] != value[key]:
+                    delta[key] = value[key]
+                    
+        return delta
+
+    # Writes the values of self that are different than the 
+    # values to permanent storage. Only values that are different from the defaults
+    # are written. Writing should be minimized to preserve the flash RAM,
+    # so only perform a write when all updates have been performed.
+    def write_delta(self):
+        delta = ujson.dumps(self.delta)
         f = open(self.persist_path, 'w')
         f.write(delta)
         f.close()
-    
-    # Updates the values of self using a dictionary, and returns the values that are
-    # not the same as the defaults
-    def _update(self, values):
-        delta = {}
+            
+    # Updates the values of self using a dictionary
+    def update(self, values):
         defaults = self.defaults
         
         for key, value in values.items():
             if key == "tank_pressure_sensor":
-                delta[key] = self.tank_pressure.update(value)
+                self.tank_pressure.update(value)
             elif key == "line_pressure_sensor":
-                delta[key] = self.line_pressure.update(value)
+                self.line_pressure.update(value)
             else:
-                if defaults[key] != values[key]:
-                    delta[key] = value
-                
                 if key == "start_pressure":
                     self.start_pressure = int(value)
                 elif key == "stop_pressure":
@@ -199,6 +235,8 @@ class Settings:
                     self.max_duty = float(value)
                 elif key == "duty_duration":
                     self.duty_duration = int(value)
+                elif key == "recovery_time":
+                    self.recovery_time = int(value)
                 elif key == "drain_duration":
                     self.drain_duration = int(value)
                 elif key == "drain_delay":
@@ -218,12 +256,12 @@ class Settings:
                     self.wlan_password = value
                 elif key == "network_retry_timeout":
                     self.network_retry_timeout = int(value)
-        
-        return delta
-                
+                        
+    # Updates the values of self from the defaults, and then tries to open a settings
+    # difference file. If one is found its settings are applied on top of the defaults.
     def _read(self):
         # Restore the default values
-        self._update(self.defaults)
+        self.update(self.defaults)
 
         try:
             f = open(self.persist_path)
@@ -232,7 +270,7 @@ class Settings:
         
             # Read any values that have been persisted and apply them on top of the defaults
             values = ujson.loads(delta)
-            self._update(values)
+            self.update(values)
         except OSError:
             print("Could not find settings file at " + self.persist_path)
             # If there are no persisted settings just move on
@@ -293,20 +331,24 @@ class EventLog(RingLog):
     def __init__(self):
         RingLog.__init__(self, namedtuple("Log", ("event", "time", "stop")), 400)
         self.console_log = True
+        self.activity_open = False
     
     # Open a new log entry for the start time
     def log_start(self, event):
         start = time.time()
         self.log(self.LogEntry(event, start, start + 100000000))
+        self.activity_open = True
         
     # Update the current log entry with the current time
     def log_stop(self):
         end_index = self.end_index
-        if end_index >= 0:
+        if end_index >= 0 and self.activity_open:
             event = self.data[end_index].event
             start = self.data[end_index].time
             stop = time.time()
+            #print("log_stop() start = %d stop = %d index = %d" % (start, stop, end_index))
             self.data[end_index] = self.LogEntry(event, start, stop)
+            self.activity_open = False
 
     def calculate_duty(self, duration):
         now = time.time()
@@ -327,6 +369,7 @@ class EventLog(RingLog):
             # stop times to the query window.
             start = max(query_start, log.time)
             stop = min(now, log.stop)
+            #print("calculate_duty have log: start = %d stop = %d" % (start, stop))
             # Count the time for this event if this is a run event in the window from
             # (query_start - now). Since the start and stop times of the log have been
             # clamped to the query window this can be tested by checking to see if the
@@ -347,7 +390,7 @@ class StateLog(RingLog):
         RingLog.__init__(self, namedtuple("State", ("time", "pressure", "duty", "state")), 400)
         self.last_log_time = 0
         self.settings = settings
-        #self.console_log = True
+        self.console_log = True
     
     def log_state(self, pressure, duty, state):
         now = int(time.time())
@@ -383,6 +426,7 @@ class Compressor:
         self.request_run_flag = False    # If this is True the compressor will run the next time that it can
         self.state = MOTOR_OFF           # True while the compressor is running, false when it is not
         self.shutdown_time = 0           # The time when the compressor is scheduled to shutdown
+        self.duty_recovery_time = 0      # The time when the motor will have recovered from the last duty cycle violation
 
         # Locate hardware registers
         self.tank_pressure_ADC = machine.ADC(tank_pressure_pin)
@@ -405,13 +449,13 @@ class Compressor:
         self.active_status.value(self.active)
         self.purge_status.value(self.drain_solenoid.value())
     
-    def read_ADC(self):
+    def _read_ADC(self):
         self.tank_pressure = self.settings.tank_pressure.map(self.tank_pressure_ADC.read_u16())        
         self.line_pressure = self.settings.line_pressure.map(self.line_pressure_ADC.read_u16())
                 
     @property
     def state_dictionary(self):
-        self.read_ADC()
+        self._read_ADC()
         
         # TODO 'Active' is not correct, it should be mapped to a state        
         return {
@@ -421,6 +465,7 @@ class Compressor:
             "active": self.active,
             "state": self.state,
             "shutdown": self.shutdown_time,
+            "duty_recovery_time": self.duty_recovery_time,
             "duty_10": self.activity_log.calculate_duty(10),
             "duty_60": self.activity_log.calculate_duty(60)
         }        
@@ -454,7 +499,6 @@ class Compressor:
             self.shutdown_time = 0
 
             self.purge()
-            self.activity_log.log_stop()
 
     def purge(self, duration = None, delay = None):
         self.purge_task = asyncio.create_task(self._purge(duration, delay))
@@ -491,12 +535,14 @@ class Compressor:
 
     def pause(self):
         self.compressor_motor.value(0)
+        self.activity_log.log_stop()
         if self.state == MOTOR_RUNNING:
             self.state = MOTOR_OFF
 
     def _update(self):
-        self.read_ADC()
+        self._read_ADC()
         
+        current_time = time.time()
         # Read the current tank pressure
         current_pressure = self.tank_pressure
         # If duty control is enabled calculate the current duty percentage
@@ -509,7 +555,7 @@ class Compressor:
         self.state_log.log_state(current_pressure, current_duty, self.state)
                     
         # If the auto shutdown time has arrived schedule a shtudown task
-        if self.shutdown_time > 0 and time.time() > self.shutdown_time and self.active:
+        if self.shutdown_time > 0 and current_time > self.shutdown_time and self.active:
             self.compressor_off()
 
         if not self.active or self.state == PURGE_OPEN or self.state == PURGE_PENDING:
@@ -526,8 +572,19 @@ class Compressor:
             self.pause()
             return
             
+        if current_time < self.duty_recovery_time:
+            self.pause()
+            return
+        
         if max_duty < 1 and current_duty > max_duty:
             self.pause()
+            # TODO recovery_time could be calculated by averaging (or taking the  max) of the last few
+            #      run cycles. For now it's just a setting
+            # TODO What should happen when the duty_recovery_time arrives? Right now the compressor will
+            #      remain off until the tank pressure drops again. But perhaps it should cycle back on
+            #      automatically to bring the tank pressure back up since it was running when it was stopped.
+            #      This could be easily handled by setting request_run to true if the motor is currently running.
+            self.duty_recovery_time = current_time + self.settings.recovery_time
             # TODO If we have a 'next' compressor we could pass them a duty token
             #      so that they run, and disable self so that we do not. This isn't the
             #      best approach to load balancing though, so more thought is be required
@@ -659,6 +716,8 @@ class CompressorServer(Server):
             if endpoint == '/settings':
                 try:
                     self.settings.update(parameters)
+                    self.settings.write_delta()
+                    
                     self.return_json(writer, self.settings.dictionary_representation)
                 except KeyError as e:
                     self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
