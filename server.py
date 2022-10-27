@@ -43,7 +43,7 @@ class Server:
                 if wlan.status() < 0 or wlan.status() >= 3:
                     break
                 retries -= 1
-                print('waiting for connection...')
+                print('waiting for connection to SSID {}...'.format(self.settings.ssid))
                 await asyncio.sleep(1)
 
             if not wlan.isconnected():
