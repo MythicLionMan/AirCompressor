@@ -1,6 +1,7 @@
 import network
 import socket
 from settings import Settings
+from settings import ValueScale
 from server import Server
 
 import ujson
@@ -90,6 +91,17 @@ html_status = """<!DOCTYPE html>
     </body>
 </html>
 """
+
+####################
+# Properties
+
+class CompressorSettings(Settings):
+    def __init__(self, defaults):
+        super().__init__(defaults)
+        
+    def setup_properties(self, defaults):
+        self.tank_pressure_sensor = ValueScale(defaults['tank_pressure_sensor'])
+        self.line_pressure_sensor = ValueScale(defaults['line_pressure_sensor'])
         
 ####################
 # Logging Functions
@@ -264,8 +276,8 @@ class Compressor:
         self.purge_status.value(self.drain_solenoid.value())
     
     def _read_ADC(self):
-        self.tank_pressure = self.settings.tank_pressure.map(self.tank_pressure_ADC.read_u16())        
-        self.line_pressure = self.settings.line_pressure.map(self.line_pressure_ADC.read_u16())
+        self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())        
+        self.line_pressure = self.settings.line_pressure_sensor.map(self.line_pressure_ADC.read_u16())
                 
     @property
     def state_dictionary(self):
@@ -439,7 +451,7 @@ class CompressorServer(Server):
     def return_html_template(self, writer, template):
         values = {}
         values.update(self.compressor.state_dictionary)
-        values.update(self.settings.dictionary_representation)
+        values.update(self.settings.values)
         
         self.response_header(writer, content_type = 'text/html')
         writer.write(template.format(**values))
@@ -495,12 +507,12 @@ class CompressorServer(Server):
                         self.settings.update(parameters)
                         self.settings.write_delta()
                         
-                        self.return_json(writer, self.settings.dictionary_representation)
+                        self.return_json(writer, self.settings.values)
                     except KeyError as e:
                         self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
                 else:
-                    self.return_json(writer, self.settings.dictionary_representation)
-            if len(parameters) > 0:
+                    self.return_json(writer, self.settings.values)
+            elif len(parameters) > 0:
                 self.return_json(writer, {'result':'unexpected parameters'}, 400)
             elif endpoint == '/':
                 self.return_html_template(writer, html_status)                
@@ -562,7 +574,7 @@ class CompressorServer(Server):
 # Main
 
 async def main():
-    settings = Settings(default_settings)
+    settings = CompressorSettings(default_settings)
     activity_log = EventLog()
     
     # Run the compressor no matter what. It is essential that the compressor pressure is monitored
