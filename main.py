@@ -403,13 +403,13 @@ class Compressor:
             return
         
         if max_duty < 1 and current_duty > max_duty:
+            # If the motor is currently running trigger a request to run again once
+            # the duty cycle condition is cleared
+            self.request_run_flag |= self.state == MOTOR_RUNNING
+
             self.pause()
             # TODO recovery_time could be calculated by averaging (or taking the  max) of the last few
             #      run cycles. For now it's just a setting
-            # TODO What should happen when the duty_recovery_time arrives? Right now the compressor will
-            #      remain off until the tank pressure drops again. But perhaps it should cycle back on
-            #      automatically to bring the tank pressure back up since it was running when it was stopped.
-            #      This could be easily handled by setting request_run to true if the motor is currently running.
             self.duty_recovery_time = current_time + self.settings.recovery_time
             # TODO If we have a 'next' compressor we could pass them a duty token
             #      so that they run, and disable self so that we do not. This isn't the
