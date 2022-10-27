@@ -438,9 +438,9 @@ class CompressorServer(Server):
                 parameters[key] = value
 
         print("Request: ", request_line)
-        print("Request Type: '{}'".format(request_type))
-        print("Endpoint: '{}'".format(endpoint))
-        print("Parameters: '{}' found: {}".format(parameter_strings, len(parameters)))
+        #print("Request Type: '{}'".format(request_type))
+        #print("Endpoint: '{}'".format(endpoint))
+        #print("Parameters: '{}' found: {}".format(parameter_strings, len(parameters)))
         
         return (request_type, endpoint, parameters)
 
