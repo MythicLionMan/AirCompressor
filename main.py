@@ -73,8 +73,11 @@ html_status = """<!DOCTYPE html>
             <tr><td>System Time</td><td>{system_time}</td></tr>
             <tr><td>Tank Pressure</td><td>{tank_pressure}</td></tr>
             <tr><td>Line Pressure</td><td>{line_pressure}</td></tr>
-            <tr><td>Active</td><td>{active}</td></tr>
-            <tr><td>State</td><td>{state}</td></tr>
+            <tr><td>Compressor On</td><td>{compressor_on}</td></tr>
+            <tr><td>Run Request Pending</td><td>{run_request}</td></tr>
+            <tr><td>Compressor Motor Running</td><td>{compressor_motor_running}</td></tr>
+            <tr><td>Purge Open</td><td>{purge_open}</td></tr>
+            <tr><td>Purge Pending</td><td>{purge_pending}</td></tr>
             <tr><td>Shutdown</td><td>{shutdown}</td></tr>
             <tr><td>Duty Recovery Time</td><td>{duty_recovery_time}</td></tr>
             <tr><td>Duty 10 Minutes</td><td>{duty_10}</td></tr>
@@ -180,13 +183,6 @@ class StateLog(RingLog):
 # Compressor Functions
 #
 
-# TODO This should be a bit mask, since MOTOR_RUNNING is independent of PURGE_PENDING and PURGE_OPEN. And if
-#      we get to that state, perhaps this should be auto synthesized from the actual pin values.
-MOTOR_RUNNING = "running"
-MOTOR_OFF = "off"
-PURGE_PENDING = "about to purge"
-PURGE_OPEN = "purging"
-
 class Compressor:
     def __init__(self, activity_log, settings):
         self.activity_log = activity_log
@@ -198,9 +194,11 @@ class Compressor:
         self.poll_interval = 1           # The time interval at which to update the compressor state
         
         # Setup state
-        self.active = False              # The compressor will only run when this is True
+        self.compressor_is_on = False    # The compressor will only run when this is True
         self.request_run_flag = False    # If this is True the compressor will run the next time that it can
-        self.state = MOTOR_OFF           # True while the compressor is running, false when it is not
+        self.compressor_running = False  # True while the compressor is running, false when it is not
+        self.purge_valve_open = False    # True when the purge valve is open, false when it is not
+        self.purge_pending = False       # True when a purge is pending, false when it is not
         self.shutdown_time = 0           # The time when the compressor is scheduled to shutdown
         self.duty_recovery_time = 0      # The time when the motor will have recovered from the last duty cycle violation
 
@@ -210,7 +208,7 @@ class Compressor:
         self.compressor_motor = Pin(compressor_motor_pin, Pin.OUT)
         self.drain_solenoid = Pin(drain_solenoid_pin, Pin.OUT)
         self.motor_status = machine.Pin(compressor_motor_status_pin, machine.Pin.OUT)
-        self.active_status = machine.Pin(compressor_active_status_pin, machine.Pin.OUT)
+        self.compressor_on_status = machine.Pin(compressor_active_status_pin, machine.Pin.OUT)
         self.purge_status = machine.Pin(purge_active_status_pin, machine.Pin.OUT)
 
         # Ensure motor is stopped, solenoids closed
@@ -222,24 +220,30 @@ class Compressor:
 
     def _update_status(self):
         self.motor_status.value(self.compressor_motor.value())
-        self.active_status.value(self.active)
+        self.compressor_on_status.value(self.compressor_is_on)
         self.purge_status.value(self.drain_solenoid.value())
     
     def _read_ADC(self):
         self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())        
         self.line_pressure = self.settings.line_pressure_sensor.map(self.line_pressure_ADC.read_u16())
-                
+    
+    @property
+    def state(self):
+        return ('O' if self.compressor_is_on else '_') + ('R' if self.compressor_running else '_') + ('P' if self.purge_valve_open else '_')
+    
     @property
     def state_dictionary(self):
         self._read_ADC()
         
-        # TODO 'Active' is not correct, it should be mapped to a state        
         return {
             "system_time": time.time(),
             "tank_pressure": self.tank_pressure,
             "line_pressure": self.line_pressure,
-            "active": self.active,
-            "state": self.state,
+            "compressor_on": self.compressor_is_on,
+            "run_request": self.request_run_flag,
+            "compressor_motor_running": self.compressor_running,
+            "purge_open": self.purge_valve_open,
+            "purge_pending": self.purge_pending,
             "shutdown": self.shutdown_time,
             "duty_recovery_time": self.duty_recovery_time,
             "duty_10": self.activity_log.calculate_duty(10),
@@ -256,8 +260,8 @@ class Compressor:
         if shutdown_in == None:
             shutdown_in = self.settings.auto_stop_time
             
-        if not self.active:
-            self.active = True
+        if not self.compressor_is_on:
+            self.compressor_is_on = True
 
             # If the shutdown parameter is > 0, schedule the shutdown relative to now
             if shutdown_in > 0:
@@ -269,9 +273,9 @@ class Compressor:
 
         # If it was active before the call then
         # trigger any stop actions
-        if self.active:
+        if self.compressor_is_on:
             # Clear the active flag and the shutdown time
-            self.active = False
+            self.compressor_is_on = False
             self.shutdown_time = 0
 
             self.purge()
@@ -286,7 +290,7 @@ class Compressor:
             delay = self.settings.drain_delay
             
         if duration > 0:
-            self.state = PURGE_PENDING
+            self.purge_pending = True
             await asyncio.sleep(delay)
             # If the motor is running, stop it
             self.pause()
@@ -294,26 +298,27 @@ class Compressor:
             # Open the drain solenoid
             self.drain_solenoid.value(1)            
             self.activity_log.log_start(EVENT_PURGE)
-            self.state = PURGE_OPEN
+            self.purge_pending = False
+            self.purge_valve_open = True
             
             await asyncio.sleep(duration)
             self.drain_solenoid.value(0)    
             self.activity_log.log_stop()
-            self.state = MOTOR_OFF
+            self.purge_valve_open = False
 
     def _run_motor(self):
         self.compressor_motor.value(1)
         self.drain_solenoid.value(0)
         
-        if self.state != MOTOR_RUNNING:
-            self.state = MOTOR_RUNNING
+        if not self.compressor_running:
+            self.compressor_running = True
             self.activity_log.log_start(EVENT_RUN)
 
     def pause(self):
         self.compressor_motor.value(0)
         self.activity_log.log_stop()
-        if self.state == MOTOR_RUNNING:
-            self.state = MOTOR_OFF
+        self.compressor_running = False
+
 
     def _update(self):
         self._read_ADC()
@@ -331,10 +336,10 @@ class Compressor:
         self.state_log.log_state(current_pressure, current_duty, self.state)
                     
         # If the auto shutdown time has arrived schedule a shtudown task
-        if self.shutdown_time > 0 and current_time > self.shutdown_time and self.active:
+        if self.shutdown_time > 0 and current_time > self.shutdown_time and self.compressor_is_on:
             self.compressor_off()
 
-        if not self.active or self.state == PURGE_OPEN or self.state == PURGE_PENDING:
+        if not self.compressor_is_on or self.purge_valve_open or self.purge_pending:
             self.pause()
             return
 
@@ -355,7 +360,7 @@ class Compressor:
         if max_duty < 1 and current_duty > max_duty:
             # If the motor is currently running trigger a request to run again once
             # the duty cycle condition is cleared
-            self.request_run_flag |= self.state == MOTOR_RUNNING
+            self.request_run_flag |= self.compressor_running
 
             self.pause()
             # TODO recovery_time could be calculated by averaging (or taking the  max) of the last few
