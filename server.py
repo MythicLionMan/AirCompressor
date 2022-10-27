@@ -23,27 +23,28 @@ class Server:
     # adapted from https://github.com/micropython/micropython/blob/d9d67adef1113ab18f1bb3c0c6204ccb210a27be/docs/wipy/tutorial/wlan.rst
     # TODO Settings doesn't have the required properties for static IP setup yet
     async def _configure_and_connect_to_network(self, max_retries):
+        settings = self.settings
         # TODO This should be machine.SOFT_RESET instead of '5' but I can't get the import to work
         if machine.reset_cause() != 5 and not self.have_configured_wlan:
             self.wlan = wlan = network.WLAN(network.STA_IF)
             wlan.active(True)
             wlan.config(pm = 0xa11140)  # Disable power-save mode
             
-            # configuration below MUST match your home router settings!!
-            # TODO Enable this to configure a static IP if the settings contain one
-            #wlan.ifconfig(config=(self.settings.ip, self.settings.net_mask, self.settings.nameserver, '8.8.8.8'))
+            # If a static config has been provided use that instead of letting the stack auto configure
+            #if settings.ip != '' and settings.net_mask != '' and settings.gateway != '' and settings.nameserver != '':
+            #    wlan.ifconfig(config=(settings.ip, settings.net_mask, settings.gateway, settings.nameserver))
             self.have_configured_wlan = True
 
         if not wlan.isconnected():
             wlan = self.wlan
-            wlan.connect(self.settings.ssid, self.settings.wlan_password)
+            wlan.connect(settings.ssid, settings.wlan_password)
             
             retries = max_retries
             while retries > 0 or max_retries == 0:
                 if wlan.status() < 0 or wlan.status() >= 3:
                     break
                 retries -= 1
-                print('waiting for connection to SSID {}...'.format(self.settings.ssid))
+                print('waiting for connection to SSID {}...'.format(settings.ssid))
                 await asyncio.sleep(1)
 
             if not wlan.isconnected():
@@ -51,7 +52,7 @@ class Server:
             else:
                 print('connected')
                 status = wlan.ifconfig()
-                print('ip = ' + status[0])      
+                print('ip = ' + status[0])
 
     def _run_blocking(self):
         addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]

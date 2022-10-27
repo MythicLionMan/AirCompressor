@@ -31,6 +31,11 @@ default_settings = {
     "ssid": 'A Network',
     "wlan_password": '',
     "network_retry_timeout": 60*5,
+    "dedicated_ip": '',
+    "netmask": '',
+    "gateway": '',
+    "nameserver": '',
+
     
     # Sensor configuration
     "tank_pressure_sensor": {
