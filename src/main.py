@@ -409,7 +409,7 @@ class CompressorServer(Server):
                 elif len(parameters) > 0:
                     self.return_json(writer, {'result':'unexpected parameters'}, 400)
                 elif endpoint == '/':
-                    self.return_html_document(writer, self.root_document)
+                    self.return_http_document(writer, self.root_document)
                 elif endpoint == '/status':
                     self.return_json(writer, compressor.state_dictionary)
                 elif endpoint == '/activity_logs':
