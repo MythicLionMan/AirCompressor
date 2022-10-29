@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Air Compressor</title>
+        <script src="utils.js"></script>
+    </head>
+    <body>
+        <h1>Air Compressor</h1>
+
+        <h2>Settings</h2>
+        <form id="settings">
+            <p><label for="start_pressure">Start Pressure:</label>
+            <input type="text" name="start_pressure" id="start_pressure" value="{start_pressure}"></p>
+        
+            <p><label for="stop_pressure">Stop Pressure:</label>
+            <input type="text" name="stop_pressure" id="stop_pressure" value="{stop_pressure}"></p>
+
+            <p><label for="max_duty">Max Duty:</label>
+            <input type="text" name="max_duty" id="max_duty" value="{max_duty}"></p>
+
+            <p><label for="duty_duration">Duty Duration:</label>
+            <input type="text" name="duty_duration" id="duty_duration" value="{duty_duration}"></p>
+
+            <p><label for="recovery_time">Recovery Time:</label>
+            <input type="text" name="recovery_time" id="recovery_time" value="{recovery_time}"></p>
+
+            <p><label for="drain_duration">Drain Duration:</label>
+            <input type="text" name="drain_duration" id="drain_duration" value="{drain_duration}"></p>
+
+            <p><label for="drain_delay">Drain Delay:</label>
+            <input type="text" name="drain_delay" id="drain_delay" value="{drain_delay}"></p>
+            
+            <p><label for="compressor_on_power_up">Compressor On Power Up:</label>
+            <input type="text" name="compressor_on_power_up" id="compressor_on_power_up" value="{compressor_on_power_up}"></p>
+            
+            <p><label for="auto_stop_time">Auto Stop Time:</label>
+            <input type="text" name="auto_stop_time" id="auto_stop_time" value="{auto_stop_time}"></p>
+            
+            <p><label for="log_interval">Log Interval:</label>
+            <input type="text" name="log_interval" id="log_interval" value="{log_interval}"></p>
+            
+            <input value="Submit" type="button" onclick="submitSettings('settings')">            
+        <form>
+    </body>
+</html>
