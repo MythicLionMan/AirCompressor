@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
     <head><title>Air Compressor</title></head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>    
     <script src="utils.js"></script>
     <script>
         monitorState();
+        monitorChart('compressorTimeline');
     </script>
     <body>
         <h1>Air Compressor</h1>
@@ -36,5 +38,6 @@
             <tr><td>Auto Stop Time</td><td>{auto_stop_time}</td></tr>
             <tr><td>Log Interval</td><td>{log_interval}</td></tr>
         </table>
+        <canvas id="compressorTimeline" width="400" height="400"></canvas>        
     </body>
 </html>
