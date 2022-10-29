@@ -64,46 +64,6 @@ drain_solenoid_pin = const(14)
 compressor_motor_status_pin = const("LED")
 compressor_active_status_pin = const(2)
 purge_active_status_pin = const(3)
-
-# HTML Templates
-
-html_status = """<!DOCTYPE html>
-<html>
-    <head><title>Air Compressor</title></head>
-    <body>
-        <h1>Air Compressor</h1>
-
-        <h2>State</h2>
-        <table>
-            <tr><td>System Time</td><td>{system_time}</td></tr>
-            <tr><td>Tank Pressure</td><td>{tank_pressure}</td></tr>
-            <tr><td>Line Pressure</td><td>{line_pressure}</td></tr>
-            <tr><td>Compressor On</td><td>{compressor_on}</td></tr>
-            <tr><td>Run Request Pending</td><td>{run_request}</td></tr>
-            <tr><td>Compressor Motor Running</td><td>{compressor_motor_running}</td></tr>
-            <tr><td>Purge Open</td><td>{purge_open}</td></tr>
-            <tr><td>Purge Pending</td><td>{purge_pending}</td></tr>
-            <tr><td>Shutdown</td><td>{shutdown}</td></tr>
-            <tr><td>Duty Recovery Time</td><td>{duty_recovery_time}</td></tr>
-            <tr><td>Duty 10 Minutes</td><td>{duty_10}</td></tr>
-            <tr><td>Duty 60 Minutes</td><td>{duty_60}</td></tr>
-        </table>
-        <h2>Settings</h2>
-        <table>
-            <tr><td>Start Pressure</td><td>{start_pressure}</td></tr>
-            <tr><td>Stop Pressure</td><td>{stop_pressure}</td></tr>
-            <tr><td>Max Duty</td><td>{max_duty}</td></tr>
-            <tr><td>Duty Duration</td><td>{duty_duration}</td></tr>
-            <tr><td>Recovery Time</td><td>{recovery_time}</td></tr>
-            <tr><td>Drain Duration</td><td>{drain_duration}</td></tr>
-            <tr><td>Drain Delay</td><td>{drain_delay}</td></tr>
-            <tr><td>Compressor On Power Up</td><td>{compressor_on_power_up}</td></tr>
-            <tr><td>Auto Stop Time</td><td>{auto_stop_time}</td></tr>
-            <tr><td>Log Interval</td><td>{log_interval}</td></tr>
-        </table>
-    </body>
-</html>
-"""
         
 ####################
 # Logging Functions
@@ -114,7 +74,7 @@ EVENT_PURGE=const(2)
 class EventLog(RingLog):
     def __init__(self):
         RingLog.__init__(self, namedtuple("Log", ("event", "time", "stop")), 400)
-        self.console_log = True
+        self.console_log = False
         self.activity_open = False
     
     # Open a new log entry for the start time
@@ -174,7 +134,7 @@ class StateLog(RingLog):
         RingLog.__init__(self, namedtuple("State", ("time", "pressure", "duty", "state")), 400)
         self.last_log_time = 0
         self.settings = settings
-        self.console_log = True
+        self.console_log = False
     
     def log_state(self, pressure, duty, state):
         now = int(time.time())
@@ -407,114 +367,104 @@ class CompressorServer(Server):
     def __init__(self, compressor, settings):
         Server.__init__(self, settings, True)
         self.compressor = compressor
+        self.root_document = 'status.html'
     
-    def return_html_template(self, writer, template):
-        values = {}
-        values.update(self.compressor.state_dictionary)
-        values.update(self.settings.values)
+    # Overloads the base class method to supply state and settings values
+    # as substitutions for html documents. Other documents do not get
+    # substitutions
+    def return_http_document(self, writer, path):
+        if path.endswith('.html'):
+            values = {}
+            values.update(self.compressor.state_dictionary)
+            values.update(self.settings.values)
+        else:
+            values = None
         
-        self.response_header(writer, content_type = 'text/html')
-        writer.write(template.format(**values))
+        super().return_http_document(writer, path = path, substitutions = values)
 
     def return_ok(self, writer):
         self.return_json(writer, {'result':'ok'})
     
-    def _parse_request(self, request_line):
-        (request_type, request, protocol) = request_line.decode('ascii').split()
-
-        tokens = request.split('?')
-
-        if len(tokens) == 0:
-            endpoint = ''
-            parameter_strings = None
-        elif len(tokens) == 1:
-            endpoint = str(tokens[0])
-            parameter_strings = None
-        elif len(tokens) == 2:
-            endpoint = str(tokens[0])
-            parameter_strings = str(tokens[1])
-        
-        parameters = {}
-        if not parameter_strings == None:
-            kv = parameter_strings.split('&')
-            for pair in kv:
-                (key, value) = pair.split('=')
-                
-                parameters[key] = value
-
-        print("Request: ", request_line)
-        #print("Request Type: '{}'".format(request_type))
-        #print("Endpoint: '{}'".format(endpoint))
-        #print("Parameters: '{}' found: {}".format(parameter_strings, len(parameters)))
-        
-        return (request_type, endpoint, parameters)
-
     async def serve_client(self, reader, writer):
-        request_line = await reader.readline()
+        try:
+            request_line = await reader.readline()
 
-        # We are not interested in HTTP request headers, skip them
-        while await reader.readline() != b"\r\n":
-            pass
-        
-        (request_type, endpoint, parameters) = self._parse_request(request_line)
+            headers = await self.read_headers(reader)
+            (request_type, endpoint, parameters) = self.parse_request(request_line)
 
-        compressor = self.compressor
-            
-        if request_type == 'GET':
-            if endpoint == '/settings':
+            compressor = self.compressor
+                
+            if request_type == 'GET':
+                if endpoint == '/settings':
+                    if len(parameters) > 0:
+                        try:
+                            self.settings.update(parameters)
+                            self.settings.write_delta()
+                            
+                            self.return_json(writer, self.settings.values)
+                        except KeyError as e:
+                            self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
+                    else:
+                        self.return_json(writer, self.settings.values)
+                elif len(parameters) > 0:
+                    self.return_json(writer, {'result':'unexpected parameters'}, 400)
+                elif endpoint == '/':
+                    self.return_html_document(writer, self.root_document)
+                elif endpoint == '/status':
+                    self.return_json(writer, compressor.state_dictionary)
+                elif endpoint == '/activity_logs':
+                    # Return all state logs since a value supplied by the caller (or all logs if there is no since)
+                    self.response_header(writer)
+                    writer.write('{"activity":[')
+                    compressor.activity_log.dump(writer, parameters.get('since', 0))
+                    writer.write(']}')
+                elif endpoint == '/state_logs':
+                    # Return all state logs since a value supplied by the caller (or all logs if there is no since)
+                    self.response_header(writer)
+                    writer.write('{"state":[')
+                    compressor.state_log.dump(writer, parameters.get('since', 0))
+                    writer.write(']}')
+                elif endpoint == '/run':
+                    compressor.request_run()
+                    self.return_ok(writer)
+                elif endpoint == '/on':
+                    compressor.compressor_on(parameters.get("shutdown_in", None))
+                    self.return_ok(writer)
+                elif endpoint == '/off':
+                    compressor.compressor_off()
+                    self.return_ok(writer)
+                elif endpoint == '/pause':
+                    compressor.pause()
+                    self.return_ok(writer)
+                elif endpoint == '/purge':
+                    compressor.purge(parameters.get("drain_duration", None), parameters.get("drain_delay", None))
+                    self.return_ok(writer)
+                else:
+                    # Not an API endpoint, try to serve the requested document
+                    # TODO Need to strip the leading '/' off of the endpoint to get the path
+                    self.return_http_document(writer, endpoint)
+            elif request_type == 'POST':
                 if len(parameters) > 0:
+                    self.return_json(writer, {'result':'unexpected parameters'}, 400)                
+                elif endpoint == '/settings' and headers['Content-Type'] == 'application/json':
+                    content_length = int(headers['Content-Length'])                    
+                    raw_data = await reader.read(content_length)
+                    parameters = ujson.loads(raw_data)
+
                     try:
                         self.settings.update(parameters)
                         self.settings.write_delta()
                         
-                        self.return_json(writer, self.settings.values)
+                        self.return_ok(writer)
                     except KeyError as e:
-                        self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
+                        self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                        
                 else:
-                    self.return_json(writer, self.settings.values)
-            elif len(parameters) > 0:
-                self.return_json(writer, {'result':'unexpected parameters'}, 400)
-            elif endpoint == '/':
-                self.return_html_template(writer, html_status)                
-            elif endpoint == '/status':
-                self.return_json(writer, compressor.state_dictionary)
-            elif endpoint == '/activity_logs':
-                # Return all state logs since a value supplied by the caller (or all logs if there is no since)
-                self.response_header(writer)
-                writer.write('{"activity":[')
-                compressor.activity_log.dump(writer, parameters.get('since', 0))
-                writer.write(']}')
-            elif endpoint == '/state_logs':
-                # Return all state logs since a value supplied by the caller (or all logs if there is no since)
-                self.response_header(writer)
-                writer.write('{"state":[')
-                compressor.state_log.dump(writer, parameters.get('since', 0))
-                writer.write(']}')
-            elif endpoint == '/run':
-                compressor.request_run()
-                self.return_ok(writer)
-            elif endpoint == '/on':
-                compressor.compressor_on(parameters.get("shutdown_in", None))
-                self.return_ok(writer)
-            elif endpoint == '/off':
-                compressor.compressor_off()
-                self.return_ok(writer)
-            elif endpoint == '/pause':
-                compressor.pause()
-                self.return_ok(writer)
-            elif endpoint == '/purge':
-                compressor.purge(parameters.get("drain_duration", None), parameters.get("drain_delay", None))
-                self.return_ok(writer)
+                    self.return_json(writer, {'result':'unknown endpoint'}, 404)
             else:
-                self.return_json(writer, {'result':'unknown endpoint'}, 404)
-        elif request_type == 'PUT':
-            self.return_json(writer, {'result':'unknown endpoint'}, 404)
-        else:
-            self.return_json(writer, {'result':'unknown method'}, 404)
-            
-                    
-        await writer.drain()
-        await writer.wait_closed()
+                self.return_json(writer, {'result':'unknown method'}, 404)
+        finally:
+            await writer.drain()
+            await writer.wait_closed()
                 
     def handle_request(self, cl):
         rawBytes = b''
@@ -527,8 +477,6 @@ class CompressorServer(Server):
         
         cl.send('HTTP/1.0 200 OK\r\nContent-type: text/html\r\n\r\n')
         cl.send('<html><head></head><body><h1>Response</h1></body></html>')
-        cl.close()
-
 
 #######################
 # Main
