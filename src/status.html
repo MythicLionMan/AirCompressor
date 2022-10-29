@@ -1,23 +1,27 @@
 <!DOCTYPE html>
 <html>
     <head><title>Air Compressor</title></head>
+    <script src="utils.js"></script>
+    <script>
+        monitorState();
+    </script>
     <body>
         <h1>Air Compressor</h1>
 
         <h2>State</h2>
         <table>
-            <tr><td>System Time</td><td>{system_time}</td></tr>
-            <tr><td>Tank Pressure</td><td>{tank_pressure}</td></tr>
-            <tr><td>Line Pressure</td><td>{line_pressure}</td></tr>
-            <tr><td>Compressor On</td><td>{compressor_on}</td></tr>
-            <tr><td>Run Request Pending</td><td>{run_request}</td></tr>
-            <tr><td>Compressor Motor Running</td><td>{compressor_motor_running}</td></tr>
-            <tr><td>Purge Open</td><td>{purge_open}</td></tr>
-            <tr><td>Purge Pending</td><td>{purge_pending}</td></tr>
-            <tr><td>Shutdown</td><td>{shutdown}</td></tr>
-            <tr><td>Duty Recovery Time</td><td>{duty_recovery_time}</td></tr>
-            <tr><td>Duty 10 Minutes</td><td>{duty_10}</td></tr>
-            <tr><td>Duty 60 Minutes</td><td>{duty_60}</td></tr>
+            <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
+            <tr><td>Tank Pressure</td><td id="tank_pressure">{tank_pressure}</td></tr>
+            <tr><td>Line Pressure</td><td id="line_pressure">{line_pressure}</td></tr>
+            <tr><td>Compressor On</td><td id="compressor_on">{compressor_on}</td></tr>
+            <tr><td>Run Request Pending</td><td id="run_request">{run_request}</td></tr>
+            <tr><td>Compressor Motor Running</td><td id="compressor_motor_running">{compressor_motor_running}</td></tr>
+            <tr><td>Purge Open</td><td id="purge_open">{purge_open}</td></tr>
+            <tr><td>Purge Pending</td><td id="purge_pending">{purge_pending}</td></tr>
+            <tr><td>Shutdown</td><td id="shutdown">{shutdown}</td></tr>
+            <tr><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
+            <tr><td>Duty 10 Minutes</td><td id="duty_10">{duty_10}</td></tr>
+            <tr><td>Duty 60 Minutes</td><td id="duty_60">{duty_60}</td></tr>
         </table>
         <h2>Settings <a href="editSettings.html">Edit</a></h2>
         <table>
