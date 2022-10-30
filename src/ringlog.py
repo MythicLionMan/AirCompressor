@@ -1,43 +1,64 @@
+import ustruct as struct
+
+# Provides an efficient ring buffer for storing logs. The buffer is a
+# bytearray, and logs are packed into it, so no allocations are needed
+# in order to append a new element. When referencing elements indexes
+# are relative to the last element added, so log[0] is the last element,
+# log[1] is the previous, etc.
 class RingLog:
-    def __init__(self, LogEntry, size_limit):
-        self.data = []
+    def __init__(self, struct_format, field_names, size_limit):
         self.size_limit = size_limit
-        self.end_index = -1
-        self.LogEntry = LogEntry
-        self.console_log = False
-    
-    def log(self, log_tuple):
-        end_index = self.end_index
-        size_limit = self.size_limit
+        self.struct_format = struct_format
+        self.field_names = field_names
 
-        if len(self.data) < size_limit:
-            self.data.append(log_tuple)
-            end_index += 1
-        else:
-            end_index = (end_index + 1) % size_limit
-            self.data[end_index] = log_tuple
-            
-        self.end_index = end_index
-
-        if self.console_log:
-            print("Logged[{}]: {}".format(end_index, log_tuple))
+        self.stride = struct.calcsize(struct_format)
+        self.data = bytearray(size_limit * self.stride)
         
+        self.console_log = False
+        self.end_index = -1
+        self.count = 0
+    
+    # Advances the insertion point by 1, and packs a new long into the buffer
+    def log(self, log_tuple):
+        # Advance the end_index to the next available slot in the log
+        self.end_index = (self.end_index + 1) % self.size_limit
+        self.count = min(self.count + 1, self.size_limit)
+
+        # Assign the tuple to the most recent slot
+        self[0] = log_tuple
+                
     # Outputs all entries in the log as tuple pairs without having to allocate one big string
     def dump(self, writer, since):
-        first = True
-        # TODO Iterating over self.data instead of self means that the entries are not in order
-        #      There's a bug though, where iterating over self only returns a single log.
-        for log in self.data:
-            if log.time > since:
-                if not first:
+        first_log = True
+        for i in range(self.count):
+            log = self[i]
+            if log[0] > since:
+                if not first_log:
                     writer.write(",")
-                first = False
-                # TODO Not if this makes sense. Perhaps should write out each field explicitly
-                #      It isn't quite correct json.
-                writer.write(ujson.dumps(log))
+                first_log = False
+
+                writer.write("{")
+                first_field = True
+                for field, value in zip(self.field_names, log):
+                    if not first_field:
+                        writer.write(",")
+                    first_field = False
+                    writer.write('"' + field + '":' + str(value))
+                writer.write("}")
         
     def __getitem__(self, index):
-        return self.data[(index + self.end_index) % self.size_limit]
+        wrapped_index = (self.end_index - index) % self.size_limit
+            
+        return struct.unpack_from(self.struct_format, self.data, wrapped_index * self.stride)
+
+    def __setitem__(self, index, log_tuple):
+        wrapped_index = (self.end_index - index) % self.size_limit
+
+        struct.pack_into(self.struct_format, self.data, wrapped_index * self.stride, *log_tuple)
+            
+        if self.console_log:
+            print("Logged[{}]: {}".format(wrapped_index, log_tuple))        
         
     def __len__(self):
-        return len(self.data)
+        return self.count
+    

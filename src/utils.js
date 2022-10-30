@@ -106,41 +106,96 @@ function monitorChart(chartId, interval = 5000) {
 function configureChart(ctx) {
     console.log('Document is ready, setting up chart');
     return new Chart(ctx, {
-        type: 'bar',
+        type: 'scatter',
         data: {
-            labels: ['Red', 'Blue', 'Yellow', 'Green', 'Purple', 'Orange'],
             datasets: [{
-                label: '# of Votes',
-                data: [12, 19, 3, 5, 2, 3],
-                backgroundColor: [
-                    'rgba(255, 99, 132, 0.2)',
-                    'rgba(54, 162, 235, 0.2)',
-                    'rgba(255, 206, 86, 0.2)',
-                    'rgba(75, 192, 192, 0.2)',
-                    'rgba(153, 102, 255, 0.2)',
-                    'rgba(255, 159, 64, 0.2)'
-                ],
-                borderColor: [
-                    'rgba(255, 99, 132, 1)',
-                    'rgba(54, 162, 235, 1)',
-                    'rgba(255, 206, 86, 1)',
-                    'rgba(75, 192, 192, 1)',
-                    'rgba(153, 102, 255, 1)',
-                    'rgba(255, 159, 64, 1)'
-                ],
-                borderWidth: 1
+                label: 'Tank Pressure',
+                showLine: true,
+                data: []
+            },{
+                label: 'Duty',
+                showLine: true,
+                data: []
             }]
-        },
-        options: {
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
         }
+        //options: {
+        //    scales: {
+        //        x: {
+        //            min: -9000,
+        //            max: 120000
+        //        },
+                //x: {
+                //    type: 'time',
+                //    time: {
+                //        tooltipFormat: "hh:mm:ss",
+                //        displayFormats: {
+                //            hour: 'hh:mm:ss'
+                //        }
+                //    },
+                //},
+       //         y: {
+       //             beginAtZero: true
+       //         }
+       //     }
+       // }
+    });    
+}
+
+last_state_update = 0;
+last_activity_update = 0;
+server_time_offset = null;
+function updateChart(chartId) {
+    console.log('Updating chart…');
+
+    // Query the server for state logs
+    fetch('/state_logs?since=' + last_state_update.toString(), {
+       method: 'GET', 
+       headers: {
+           'Accept': 'application/json',
+       }
+    })
+    .then((response) => response.json())
+    .then((data) => {
+        // Store the current server time (in the server timescale)
+        last_state_update = data['time'];
+        
+        // Calculate when the chart should end (in the local timescale)
+        domainEnd = last_state_update*1000
+        // Calculate when the chart should start
+        // TODO This duration could be a configuration parameter. It is local,
+        //      since we can make the chart as long as we'd like (by keeping the data around)
+        domainStart = domainEnd - 5*60*1000;
+        
+        if (server_time_offset === null) {
+            server_time_offset = domainEnd - Date.now();
+            console.log(server_time_offset);
+        }
+        chartAppendState(chart, data, server_time_offset);
+        
+        // Update the chart to show the new data
+        chart.update()
+    })
+    .catch((error) => {
+       console.error('Communication Error:', error);
     });
 }
 
-function updateChart(chartId) {
-    console.log('Updating chart…');
+function chartAppendState(chart, data, server_time_offset) {
+    // The data arrives with the most recent log first. Reverse it to append to the end.
+    states = data.state.reverse();
+    // Map the times from the server time to the local time
+    states.forEach((state, index) => {
+        state.time = state.time*1000 - server_time_offset;
+    });
+    // Convert to x/y values for different datasets
+    pressures = states.map((state) => { return { x: state.time, y: state.tank_pressure}});
+    dutyData = states.map((state) => { return { x: state.time, y: state.duty}});
+    
+    // Append the new data to the datasets
+    chart.data.datasets[0].data.push(...pressures);
+    chart.data.datasets[1].data.push(...dutyData);
+    
+    //times = chart.data.datasets[0].data.map((point) => { return point.x; });
+    //chart.options.scales.x.min = Math.min(...times)
+    //chart.options.scales.x.max = Math.max(...times)
 }

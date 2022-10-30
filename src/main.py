@@ -11,7 +11,6 @@ import time
 from machine import Pin
 from machine import WDT
 import uasyncio as asyncio
-from ucollections import namedtuple
 
 # Default values for the persistent settings. These can be edited and saved.
 default_settings = {
@@ -68,30 +67,42 @@ purge_active_status_pin = const(3)
 ####################
 # Logging Functions
 
-EVENT_RUN=const(1)
-EVENT_PURGE=const(2)
+EVENT_RUN=const(b'R')
+EVENT_PURGE=const(b'P')
 
 class EventLog(RingLog):
     def __init__(self):
-        RingLog.__init__(self, namedtuple("Log", ("event", "time", "stop")), 400)
-        self.console_log = False
+        RingLog.__init__(self, "LLs", ["start", "stop", "event"], 40)
+        self.console_log = True
         self.activity_open = False
     
+    def d(self):
+        print("== history")
+        for i in range(len(self)):
+            print(self[i])
+        print("==")
+        
     # Open a new log entry for the start time
     def log_start(self, event):
         start = time.time()
-        self.log(self.LogEntry(event, start, start + 100000000))
+        # TODO Instead of + 1000000 this should just be int max, for the max possible time
+        self.log((start, start + 100000000, event))
         self.activity_open = True
         
     # Update the current log entry with the current time
     def log_stop(self):
-        end_index = self.end_index
-        if end_index >= 0 and self.activity_open:
-            event = self.data[end_index].event
-            start = self.data[end_index].time
+        if self.activity_open:
+            # Grab the most recent log (for the open activity)
+            current_log = self[0]
+            
+            # Extract the log properties
+            event = current_log[2]
+            start = current_log[0]
+            
             stop = time.time()
-            #print("log_stop() start = %d stop = %d index = %d" % (start, stop, end_index))
-            self.data[end_index] = self.LogEntry(event, start, stop)
+            
+            # Update the log with the current time as the stop time
+            self[0] = (start, stop, event)
             self.activity_open = False
 
     def calculate_duty(self, duration):
@@ -103,22 +114,21 @@ class EventLog(RingLog):
             query_start = now
         
         # Find the total time that the compressor was running in the window (query_start - now)
-        # NOTE: There is no need to iterate the logs in order. Iterating over self
-        #       will do just that, but is slightly less efficient than iterating
-        #       over self.data directly, so the iteration is over self.data.
         total_runtime = 0
-        for log in self.data:
+        for i in range(len(self)):
+            log = self[i]
+            event = log[2]
             # Logs that are 'open' will have a stop time in the distant future. Logs that
             # end within the interval may have started before it began. Clamp the stop and
             # stop times to the query window.
-            start = max(query_start, log.time)
-            stop = min(now, log.stop)
+            start = max(query_start, log[0])
+            stop = min(now, log[1])
             #print("calculate_duty have log: start = %d stop = %d" % (start, stop))
             # Count the time for this event if this is a run event in the window from
             # (query_start - now). Since the start and stop times of the log have been
             # clamped to the query window this can be tested by checking to see if the
             # clamped interval is not empty.
-            if log.event == EVENT_RUN and stop > start:
+            if event == EVENT_RUN and stop > start:
                 total_runtime += stop - start
         
         duty = total_runtime/duration
@@ -131,7 +141,10 @@ class EventLog(RingLog):
 
 class StateLog(RingLog):
     def __init__(self, settings):
-        RingLog.__init__(self, namedtuple("State", ("time", "pressure", "duty", "state")), 400)
+        # TODO There is an issue with unpacking string values, so I'm disabling the state for now.
+        #      Once the leading 'b' can be stripped this should be re-instated
+        #RingLog.__init__(self, "Lff3s", ["time", "pressure", "duty", "state"], 200)
+        RingLog.__init__(self, "Lff", ["time", "tank_pressure", "duty"], 200)
         self.last_log_time = 0
         self.settings = settings
         self.console_log = False
@@ -142,8 +155,12 @@ class StateLog(RingLog):
         #print("now = " + str(now) + " since last " + str(since_last) + " Interval " + str(self.settings.log_interval))
         if since_last > self.settings.log_interval:
             self.last_log_time = now
-            self.log(self.LogEntry(now, pressure, duty, state))
-
+            self.log((now, pressure, duty, state))
+            
+    @property
+    def max_duration(self):
+        return self.settings.log_interval * self.size_limit
+            
 ######################
 # Compressor Functions
 #
@@ -406,38 +423,64 @@ class CompressorServer(Server):
                             self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
                     else:
                         self.return_json(writer, self.settings.values)
+                
+                # The rest of the commands only accept 0 - 2 parameters
+                elif len(parameters) > 2:                
+                    self.return_json(writer, {'result':'unexpected parameters'}, 400)                        
+                elif endpoint == '/purge':
+                    drain_duration = parameters.get("drain_duration", None)
+                    if drain_duration:
+                        drain_duration = int(drain_duration)
+
+                    drain_duration = parameters.get("drain_delay", None)
+                    if drain_delay:
+                        drain_delay = int(drain_delay)
+
+                    shutdown_time = parameters.get("shutdown_in", None)
+                    if shutdown_time:
+                        shutdown_time = int(shutdown_time)
+
+                    compressor.purge(drain_duration, drain_delay)
+                    self.return_ok(writer)
+                
+                # The rest of the commands only accept 0 or 1 parameters
+                elif len(parameters) > 1:
+                    self.return_json(writer, {'result':'unexpected parameters'}, 400)                        
+                elif endpoint == '/activity_logs':
+                    # Return all state logs since a value supplied by the caller (or all logs if there is no since)
+                    self.response_header(writer)
+                    writer.write('{"time":' + str(time.time()) + ',"activity":[')
+                    compressor.activity_log.dump(writer, int(parameters.get('since', 0)))
+                    writer.write(']}')
+                elif endpoint == '/state_logs':
+                    # Return all state logs since a value supplied by the caller (or all logs if there is no since)
+                    self.response_header(writer)
+                    writer.write('{"time":' + str(time.time()) + ',"maxDuration":' + str(compressor.state_log.max_duration) + ',"state":[')
+                    compressor.state_log.dump(writer, int(parameters.get('since', 0)))
+                    writer.write(']}')
+                elif endpoint == '/on':
+                    shutdown_time = parameters.get("shutdown_in", None)
+                    if shutdown_time:
+                        shutdown_time = int(shutdown_time)
+                        
+                    compressor.compressor_on(shutdown_time)
+                    self.return_ok(writer)
+
+                # The rest of the commands do not accept parameters
                 elif len(parameters) > 0:
                     self.return_json(writer, {'result':'unexpected parameters'}, 400)
                 elif endpoint == '/':
                     self.return_http_document(writer, self.root_document)
                 elif endpoint == '/status':
                     self.return_json(writer, compressor.state_dictionary)
-                elif endpoint == '/activity_logs':
-                    # Return all state logs since a value supplied by the caller (or all logs if there is no since)
-                    self.response_header(writer)
-                    writer.write('{"activity":[')
-                    compressor.activity_log.dump(writer, parameters.get('since', 0))
-                    writer.write(']}')
-                elif endpoint == '/state_logs':
-                    # Return all state logs since a value supplied by the caller (or all logs if there is no since)
-                    self.response_header(writer)
-                    writer.write('{"state":[')
-                    compressor.state_log.dump(writer, parameters.get('since', 0))
-                    writer.write(']}')
                 elif endpoint == '/run':
                     compressor.request_run()
-                    self.return_ok(writer)
-                elif endpoint == '/on':
-                    compressor.compressor_on(parameters.get("shutdown_in", None))
                     self.return_ok(writer)
                 elif endpoint == '/off':
                     compressor.compressor_off()
                     self.return_ok(writer)
                 elif endpoint == '/pause':
                     compressor.pause()
-                    self.return_ok(writer)
-                elif endpoint == '/purge':
-                    compressor.purge(parameters.get("drain_duration", None), parameters.get("drain_delay", None))
                     self.return_ok(writer)
                 else:
                     # Not an API endpoint, try to serve the requested document
