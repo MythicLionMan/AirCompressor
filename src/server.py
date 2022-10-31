@@ -66,13 +66,6 @@ class Server:
     # Returns a file stored in the local file system
     def return_http_document(self, writer, path, substitutions = None, status = 200):
         try:
-            f = open(path)
-            document = f.read()
-            f.close()
-
-            if substitutions:
-                document = document.format(**substitutions)
-            
             if path.endswith('.html'):
                 content_type = 'text/html'
             elif path.endswith('.js'):
@@ -81,9 +74,24 @@ class Server:
                 content_type = 'application/json'
             else:
                 content_type = 'text/plain'
-                
+
             self.response_header(writer, content_type = content_type)
-            writer.write(document)
+
+            f = open(path)
+            if substitutions:
+                # Read the entire document in order to perform substitutions
+                document = f.read()
+                document = document.format(**substitutions)
+                writer.write(document)
+            else:
+                # Transimit the document in chunks to save memory
+                while True:
+                    chunk = f.read(1024)
+                    if chunk == '':
+                        break
+                    writer.write(chunk)
+                
+            f.close()    
         except OSError:
             self.response_header(writer, status = 404, content_type = 'text/html')
             writer.write('<html><head></head><body><h1>Error 404: Document {} not found.</h1></body></html>'.format(path))
