@@ -220,17 +220,17 @@ function updateChart(chartId) {
         
         // Calculate when the chart should end (in the local timescale)
         domainEnd = last_state_update*1000
-        // Calculate when the chart should start
-        // TODO This duration could be a configuration parameter. It is local,
-        //      since we can make the chart as long as we'd like (by keeping the data around)
-        domainStart = domainEnd - 5*60*1000;
         
         if (server_time_offset === null) {
             server_time_offset = domainEnd - Date.now();
             console.log(server_time_offset);
         }
+        // Append the new data to the chart
         chartAppendState(chart, data, server_time_offset);
-        
+        // TODO This duration could be a configuration parameter. It is local,
+        //      since we can make the chart as long as we'd like (by keeping the data around)
+        chartUpdateDomain(chart, domainEnd, 5*60*1000);
+    
         // Update the chart to show the new data
         chart.update()
     })
@@ -254,7 +254,17 @@ function chartAppendState(chart, data, server_time_offset) {
     chart.data.datasets[0].data.push(...pressures);
     chart.data.datasets[2].data.push(...dutyData);
     
+    // NOTE This is just for reference. The domain is initialized using the current time in updateDomain()
     //times = chart.data.datasets[0].data.map((point) => { return point.x; });
     //chart.options.scales.x.min = Math.min(...times)
     //chart.options.scales.x.max = Math.max(...times)
+}
+
+function chartUpdateDomain(chart, domainEnd, duration) {
+    // Calculate when the chart should start
+    domainStart = domainEnd - duration;
+
+    // Update the domain of the x axis
+    chart.options.scales.x.min = domainStart - server_time_offset;
+    chart.options.scales.x.max = domainEnd - server_time_offset;
 }
