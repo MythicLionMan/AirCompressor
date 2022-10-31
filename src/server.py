@@ -3,6 +3,7 @@ import machine
 import network
 import socket
 import ujson
+import sys
     
 # Loosly based on https://gist.github.com/aallan/3d45a062f26bc425b22a17ec9c81e3b6
 class Server:
@@ -165,7 +166,8 @@ class Server:
                     self._run_blocking()
                     print('Webserver is done. Bye bye.')
             except Exception as e:
-                print(e)
+                print('Error in main runloop')
+                sys.print_exception(e)
 
             # Sleep for a while, then try to connect again
             await asyncio.sleep(self.settings.network_retry_timeout)

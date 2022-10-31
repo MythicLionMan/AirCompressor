@@ -7,6 +7,7 @@ from ringlog import RingLog
 
 import ujson
 import time
+import sys
 
 from machine import Pin
 from machine import WDT
@@ -540,7 +541,7 @@ async def main():
         server.run()
     except Exception as e:
         print("Network error. Running without API.")
-        print(e)
+        sys.print_exeception(e)
     
     # Loop forever while the coroutines process
     #asyncio.get_event_loop().run_forever()
