@@ -43,6 +43,15 @@ class RingLog:
                     if not first_field:
                         writer.write(",")
                     first_field = False
+                    # Value may be a binary string. If it is it's string representation
+                    # will not be valid json (it will be represented as b'value'). Try
+                    # to decode it, and if that fails asume that it's a type with a valid
+                    # conversion.
+                    try:
+                        value = '"' + value.decode() + '"'
+                    except:
+                        pass
+                    
                     writer.write('"' + field + '":' + str(value))
                 writer.write("}")
         

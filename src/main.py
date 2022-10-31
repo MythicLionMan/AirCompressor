@@ -141,10 +141,7 @@ class EventLog(RingLog):
 
 class StateLog(RingLog):
     def __init__(self, settings):
-        # TODO There is an issue with unpacking string values, so I'm disabling the state for now.
-        #      Once the leading 'b' can be stripped this should be re-instated
-        #RingLog.__init__(self, "Lff3s", ["time", "pressure", "duty", "state"], 200)
-        RingLog.__init__(self, "Lff", ["time", "tank_pressure", "duty"], 200)
+        RingLog.__init__(self, "Lff3s", ["time", "pressure", "duty", "state"], 200)
         self.last_log_time = 0
         self.settings = settings
         self.console_log = False
