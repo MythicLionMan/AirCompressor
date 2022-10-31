@@ -111,9 +111,10 @@ class Server:
             #if settings.ip != '' and settings.net_mask != '' and settings.gateway != '' and settings.nameserver != '':
             #    wlan.ifconfig(config=(settings.ip, settings.net_mask, settings.gateway, settings.nameserver))
             self.have_configured_wlan = True
+        else:
+            wlan = self.wlan
 
         if not wlan.isconnected():
-            wlan = self.wlan
             wlan.connect(settings.ssid, settings.wlan_password)
             
             retries = max_retries
