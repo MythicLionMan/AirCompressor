@@ -74,7 +74,7 @@ EVENT_PURGE=const(b'P')
 class EventLog(RingLog):
     def __init__(self):
         RingLog.__init__(self, "LLs", ["start", "stop", "event"], 40)
-        self.console_log = True
+        self.console_log = False
         self.activity_open = False
     
     def d(self):
