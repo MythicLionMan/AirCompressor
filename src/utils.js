@@ -195,7 +195,15 @@ function configureChart(ctx) {
                         minRotation: 0
                     } 
                 }
+            },
+            plugins: {
+                autocolors: false,
+                annotation: {
+                    annotations: {
+                    }
+                }
             }
+            
         }
     });    
 }
@@ -235,7 +243,37 @@ function updateChart(chartId) {
         chart.update()
     })
     .catch((error) => {
-       console.error('Communication Error:', error);
+       console.error('Communication Error Fetching State:', error);
+    });
+
+    // Query the server for activity logs
+    fetch('/activity_logs?since=' + last_activity_update.toString(), {
+       method: 'GET', 
+       headers: {
+           'Accept': 'application/json',
+       }
+    })
+    .then((response) => response.json())
+    .then((data) => {
+        // Store the current server time (in the server timescale)
+        // TODO If the query is limited then events that have been received in the
+        //      past but have been updated are not returned. This leaves every activity
+        //      unterminated. Activities that have been modified need to be refetched.
+        //      This is because activities can be modified, unlike other logs. One solution
+        //      would be to fetch based on modified time, rather than activity time. Another
+        //      would be to fetch based on stop time rather than modified time.
+        //      Always fetching all activities is somewhat expensive, since every query
+        //      will return the full buffer.
+        last_activity_update = 0;//data['time'];
+                
+        // Append the new data to the chart
+        chartAppendActivity(chart, data, server_time_offset);
+    
+        // Update the chart to show the new data
+        chart.update()
+    })
+    .catch((error) => {
+       console.error('Communication Error Fetching Activity:', error);
     });
 }
 
@@ -258,6 +296,34 @@ function chartAppendState(chart, data, server_time_offset) {
     //times = chart.data.datasets[0].data.map((point) => { return point.x; });
     //chart.options.scales.x.min = Math.min(...times)
     //chart.options.scales.x.max = Math.max(...times)
+}
+
+function chartAppendActivity(chart, data, server_time_offset) {
+    activities = data.activity;
+
+    // Map the times from the server time to the local time
+    activities.forEach((activity, index) => {
+        start = activity.start*1000 - server_time_offset;
+        end = activity.stop*1000 - server_time_offset;
+
+        // Choose the colour based on the event type
+        if (activity.event == "R") { // Compressor motor is running
+            colour = 'rgba(66, 245, 209, 0.25)';
+        } else if (activity.event == "P") {	// Compressor purge valve is open
+            colour = 'rgba(245, 212, 66, 0.25)';
+        } else {
+            colour = 'rgba(230, 230, 230, 0.25)';
+        }
+        
+        // Update the activity details in the annotations table
+        chart.options.plugins.annotation.annotations['activity_id_' + activity.start.toString()] = {
+            type: 'box',
+            xMin: start,
+            xMax: end,
+            yScaleID: 'percent',
+            backgroundColor: colour            
+        }
+    });
 }
 
 function chartUpdateDomain(chart, domainEnd, duration) {
