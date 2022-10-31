@@ -7,9 +7,19 @@
         monitorState();
         monitorChart('compressorTimeline');
     </script>
+    <style>
+    #compressorTimelineContainer {{
+        float: right;
+        width: 65%;
+        aspect-ratio: 3/2;
+    }}
+    </style>
     <body>
         <h1>Air Compressor</h1>
 
+        <div id="compressorTimelineContainer">
+            <canvas id="compressorTimeline"></canvas>
+        </div>
         <h2>State</h2>
         <table>
             <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
@@ -38,6 +48,5 @@
             <tr><td>Auto Stop Time</td><td>{auto_stop_time}</td></tr>
             <tr><td>Log Interval</td><td>{log_interval}</td></tr>
         </table>
-        <canvas id="compressorTimeline" width="200" height="200"></canvas>        
     </body>
 </html>
