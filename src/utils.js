@@ -285,17 +285,14 @@ function chartAppendState(chart, data, server_time_offset) {
         state.time = state.time*1000 - server_time_offset;
     });
     // Convert to x/y values for different datasets
-    pressures = states.map((state) => { return { x: state.time, y: state.tank_pressure}});
+    tankPressures = states.map((state) => { return { x: state.time, y: state.tank_pressure}});
+    linePressures = states.map((state) => { return { x: state.time, y: state.line_pressure}});
     dutyData = states.map((state) => { return { x: state.time, y: state.duty}});
     
     // Append the new data to the datasets
-    chart.data.datasets[0].data.push(...pressures);
+    chart.data.datasets[0].data.push(...tankPressures);
+    chart.data.datasets[1].data.push(...linePressures);
     chart.data.datasets[2].data.push(...dutyData);
-    
-    // NOTE This is just for reference. The domain is initialized using the current time in updateDomain()
-    //times = chart.data.datasets[0].data.map((point) => { return point.x; });
-    //chart.options.scales.x.min = Math.min(...times)
-    //chart.options.scales.x.max = Math.max(...times)
 }
 
 function chartAppendActivity(chart, data, server_time_offset) {

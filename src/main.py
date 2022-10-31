@@ -141,18 +141,18 @@ class EventLog(RingLog):
 
 class StateLog(RingLog):
     def __init__(self, settings):
-        RingLog.__init__(self, "Lff3s", ["time", "pressure", "duty", "state"], 200)
+        RingLog.__init__(self, "Lfff3s", ["time", "tank_pressure", "line_pressure", "duty", "state"], 200)
         self.last_log_time = 0
         self.settings = settings
         self.console_log = False
     
-    def log_state(self, pressure, duty, state):
+    def log_state(self, tank_pressure, line_pressure, duty, state):
         now = int(time.time())
         since_last = now - self.last_log_time
         #print("now = " + str(now) + " since last " + str(since_last) + " Interval " + str(self.settings.log_interval))
         if since_last > self.settings.log_interval:
             self.last_log_time = now
-            self.log((now, pressure, duty, state))
+            self.log((now, tank_pressure, line_pressure, duty, state))
             
     @property
     def max_duration(self):
@@ -312,7 +312,7 @@ class Compressor:
         else:
             current_duty = 0
 
-        self.state_log.log_state(current_pressure, current_duty, self.state)
+        self.state_log.log_state(current_pressure, self.line_pressure, current_duty, self.state)
                     
         # If the auto shutdown time has arrived schedule a shtudown task
         if self.shutdown_time > 0 and current_time > self.shutdown_time and self.compressor_is_on:
