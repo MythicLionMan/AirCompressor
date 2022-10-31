@@ -129,7 +129,14 @@ function configureChart(ctx) {
                 label: 'Tank Pressure',
                 showLine: true,
                 data: [],
-                yAxisID: 'pressure'
+                yAxisID: 'pressure',
+                borderColor: '#FF0000'
+            },{
+                label: 'Line Pressure',
+                showLine: true,
+                data: [],
+                yAxisID: 'pressure',
+                borderColor: '#FFFF00'
             },{
                 label: 'Duty',
                 showLine: true,
@@ -148,6 +155,11 @@ function configureChart(ctx) {
             }]
         },
         options: {
+            elements: {
+                point: {
+                    radius: 0
+                }
+            },
             scales: {
                 pressure: {
                     type: 'linear',
@@ -168,15 +180,21 @@ function configureChart(ctx) {
                         drawOnChartArea: false, // only want the grid lines for one axis to show up
                     },
                 },
-                //x: {
-                //    type: 'time',
-                //    time: {
-                //        tooltipFormat: "hh:mm:ss",
-                //        displayFormats: {
-                //            hour: 'hh:mm:ss'
-                //        }
-                //    },
-                //}
+                x: {
+                    type: 'time',
+                    time: {
+                        tooltipFormat: "hh:mm:ss",
+                        displayFormats: {
+                            hour: 'hh:mm:ss'
+                        }
+                    },
+                    ticks: {
+                        autoSkip: true,
+                        maxTicksLimit: 5,
+                        maxRotation: 0,
+                        minRotation: 0
+                    } 
+                }
             }
         }
     });    
@@ -234,7 +252,7 @@ function chartAppendState(chart, data, server_time_offset) {
     
     // Append the new data to the datasets
     chart.data.datasets[0].data.push(...pressures);
-    chart.data.datasets[1].data.push(...dutyData);
+    chart.data.datasets[2].data.push(...dutyData);
     
     //times = chart.data.datasets[0].data.map((point) => { return point.x; });
     //chart.options.scales.x.min = Math.min(...times)
