@@ -103,6 +103,23 @@ function monitorChart(chartId, interval = 5000) {
     }
 }
 
+let width, height, gradient;
+function getGradient(ctx, chartArea) {
+    const chartWidth = chartArea.right - chartArea.left;
+    const chartHeight = chartArea.bottom - chartArea.top;
+    if (!gradient || width !== chartWidth || height !== chartHeight) {
+        // Create the gradient because this is either the first render
+        // or the size of the chart has changed
+        width = chartWidth;
+        height = chartHeight;
+        gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+        gradient.addColorStop(0, 'rgb(75, 192, 192)');
+        gradient.addColorStop(1, 'rgb(255, 99, 132)');
+    }
+
+    return gradient;
+}
+
 function configureChart(ctx) {
     console.log('Document is ready, setting up chart');
     return new Chart(ctx, {
@@ -111,19 +128,46 @@ function configureChart(ctx) {
             datasets: [{
                 label: 'Tank Pressure',
                 showLine: true,
-                data: []
+                data: [],
+                yAxisID: 'pressure'
             },{
                 label: 'Duty',
                 showLine: true,
-                data: []
+                data: [],
+                yAxisID: 'percent',
+                borderColor: function(context) {
+                    const chart = context.chart;
+                    const {ctx, chartArea} = chart;
+
+                    if (!chartArea) {
+                      // This case happens on initial chart load
+                      return;
+                    }
+                    return getGradient(ctx, chartArea);
+                },
             }]
-        }
-        //options: {
-        //    scales: {
-        //        x: {
-        //            min: -9000,
-        //            max: 120000
-        //        },
+        },
+        options: {
+            scales: {
+                pressure: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    min: 0,
+                    max: 150
+                },
+                percent: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    min: 0,
+                    max: 1,
+
+                    // grid line settings
+                    grid: {
+                        drawOnChartArea: false, // only want the grid lines for one axis to show up
+                    },
+                },
                 //x: {
                 //    type: 'time',
                 //    time: {
@@ -132,12 +176,9 @@ function configureChart(ctx) {
                 //            hour: 'hh:mm:ss'
                 //        }
                 //    },
-                //},
-       //         y: {
-       //             beginAtZero: true
-       //         }
-       //     }
-       // }
+                //}
+            }
+        }
     });    
 }
 
