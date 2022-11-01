@@ -1,3 +1,9 @@
+settings = {
+    stateQueryInterval: 5000,
+    chartQueryInterval: 5000,
+    chartDuration: [ 5*60*1000, 10*60*1000, 20*60*1000 ]
+};
+
 class CompressorActions {
     submitSettings(formID) {
         // Convert the form to json
@@ -72,7 +78,9 @@ class StateMonitor {
     }
     
     // Begins periodically polling the server for the state of self
-    monitor(interval = 5000) {
+    monitor(interval = null) {
+        if (interval === null) { interval = settings.stateQueryInterval; }
+        
         if (interval == 0) {
             if (this.monitorId) {
                 clearInterval(this.monitorId);
@@ -140,6 +148,8 @@ class ChartMonitor {
         this.last_activity_update = 0;
         this.server_time_offset = null;
 
+        this.setChartDurationIndex(0);
+
         if (document.readyState === 'complete') {
             this.chart = configureChart(document.getElementById(chartId).getContext('2d'));
         } else {
@@ -151,7 +161,9 @@ class ChartMonitor {
         }
     }
 
-    monitor(chartId, interval = 5000) {
+    monitor(chartId, interval = null) {
+        if (interval === null) { interval = settings.chartQueryInterval; }
+    
         if (interval == 0) {
             if (this.monitorId) {
                 clearInterval(this.monitorId);
@@ -163,6 +175,18 @@ class ChartMonitor {
         }
     }
 
+    setChartDurationIndex(index) {
+        if (this.chartDurationIndex != index) {
+            this.chartDuration = settings.chartDuration[index];
+            this.chartDurationIndex = index;
+            
+            if (this.chart) {
+                this.updateDomain();
+                this.chart.update();
+            }
+        }
+    }
+    
     getDutyGradient(ctx, chartArea) {
         const chartWidth = chartArea.right - chartArea.left;
         const chartHeight = chartArea.bottom - chartArea.top;
@@ -266,7 +290,9 @@ class ChartMonitor {
                 }
                 
             }
-        });    
+        });
+        
+        this.updateDomain();
     }
 
     updateChart(chartId) {
@@ -314,9 +340,7 @@ class ChartMonitor {
         // Append the new data to the chart
         this.appendStateData(data);
         
-        // TODO This duration could be a configuration parameter. It is local,
-        //      since we can make the chart as long as we'd like (by keeping the data around)
-        this.updateDomain(domainEnd, 5*60*1000);
+        this.updateDomain(domainEnd, this.chartDuration);
     
         // Update the chart to show the new data
         this.chart.update()
@@ -388,12 +412,18 @@ class ChartMonitor {
         });
     }
 
-    updateDomain(domainEnd, duration) {
-        // Calculate when the chart should start
-        const domainStart = domainEnd - duration;
+    updateDomain(domainEnd = null) {
+        if (domainEnd === null) {
+            let now = Date.now();
+            this.chart.options.scales.x.max = now;
+            this.chart.options.scales.x.min = now - this.chartDuration;
+        } else {
+            // Calculate when the chart should start
+            const domainStart = domainEnd - this.chartDuration;
 
-        // Update the domain of the x axis
-        this.chart.options.scales.x.min = domainStart - this.server_time_offset;
-        this.chart.options.scales.x.max = domainEnd - this.server_time_offset;
+            // Update the domain of the x axis
+            this.chart.options.scales.x.min = domainStart - this.server_time_offset;
+            this.chart.options.scales.x.max = domainEnd - this.server_time_offset;
+        }
     }
 }

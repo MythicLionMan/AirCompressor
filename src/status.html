@@ -24,6 +24,11 @@
         <h1>Air Compressor</h1>
 
         <div id="compressorTimelineContainer">
+            <div>
+                <button onclick="chartMonitor.setChartDurationIndex(0)">Short</button>
+                <button onclick="chartMonitor.setChartDurationIndex(1)">Medium</button>
+                <button onclick="chartMonitor.setChartDurationIndex(2)">Long</button>
+            </div>
             <canvas id="compressorTimeline"></canvas>
         </div>
         <h2>State</h2>
