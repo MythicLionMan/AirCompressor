@@ -11,22 +11,35 @@ class CompressorActions {
         let data = {};
         formData.forEach((value, key) => data[key] = value);
                 
-        this.submitToEndpoint('POST', '/settings', data, 'Server did not accept settings.')
+        this.submitToEndpoint('POST', '/settings', data)
     }
     
     turnOn() {
-        this.submitToEndpoint('GET', '/on', {}, 'Server did not turn on.')
+        this.submitToEndpoint('GET', '/on')
     }
 
     turnOff() {
-        this.submitToEndpoint('GET', '/off', {}, 'Server did not turn off.')
+        this.submitToEndpoint('GET', '/off')
+    }
+
+    pause() {
+        this.submitToEndpoint('GET', '/pause')
+    }
+
+    run() {
+        this.submitToEndpoint('GET', '/run')
     }
 
     purge() {
-        this.submitToEndpoint('GET', '/on', {}, 'Server did not purge.')    
+        this.submitToEndpoint('GET', '/purge')    
     }
     
-    submitToEndpoint(method, endpoint, bodyData, errorMessage) {
+    submitToEndpoint(method, endpoint, bodyData) {
+        var body = null;
+        if (bodyData) {
+            body = JSON.stringify(bodyData);
+        }
+        
         // Submit to the server
         fetch(endpoint, {
            method: method, 
@@ -34,41 +47,55 @@ class CompressorActions {
                'Accept': 'application/json',
                'Content-Type': 'application/json'
            },
-           body: JSON.stringify(bodyData)
+           body: body
         })
         .then((response) => response.json())
         .then((data) => {
            if (data['result'] == 'ok') {
-               this.callSuccess();
+               this.callSuccess(endpoint);
            } else {
                console.log('Error updating remote')       
-               this.callFailure(errorMessage);
+               this.callFailure(endpoint);
            }
         })
         .catch((error) => {
            console.error('Communication Error:', error);
-           this.callFailure('Error sending or handling request. ' + error.toString());
+           this.callFailure(endpoint);
         });
     }
     
-    callSuccess() {
-        if (!this.success()) {
-            alert('Settings Updated');
+    callSuccess(endpoint) {
+        const messages = {
+            "/settings": 'Settings Updated'
         }
+            
+        this.success(endpoint, messages[endpoint]);
     }
     
     callFailure(endpoint) {
-        if (!this.failure(endpoint, message)) {
+        const messages = {
+            "/settings": 'Compressor rejected settings',
+            "/on": 'Compressor did not turn on',
+            "/off": 'Compressor did not turn off',
+            "/run": 'Compressor did not run',
+            "/pause": 'Compressor did not pause',
+            "/purge": 'Compressor did not purge'
+        }
+        this.failure(endpoint, messages[endpoint]);
+    }
+    
+    // Derived classes can overload this method to show the message differently
+    success(endpoint, message) {
+        if (message) {
             alert(message);
         }
     }
-    
-    success() {
-        return false;
-    }
 
+    // Derived classes can overload this method to show the error differently
     failure(endpoint, message) {
-        return false;
+        if (message) {
+            alert(message);
+        }
     }    
 }
 
