@@ -387,7 +387,7 @@ class CompressorServer(Server):
     # Overloads the base class method to supply state and settings values
     # as substitutions for html documents. Other documents do not get
     # substitutions
-    def return_http_document(self, writer, path):
+    async def return_http_document(self, writer, path):
         if path.endswith('.html'):
             values = {}
             values.update(self.compressor.state_dictionary)
@@ -395,7 +395,7 @@ class CompressorServer(Server):
         else:
             values = None
         
-        super().return_http_document(writer, path = path, substitutions = values)
+        await super().return_http_document(writer, path = path, substitutions = values)
 
     def return_ok(self, writer):
         self.return_json(writer, {'result':'ok'})
@@ -404,6 +404,7 @@ class CompressorServer(Server):
         try:
             request_line = await reader.readline()
 
+            # TODO Don't log every endpoint, only log serving pages (every endpoint gets chatty)
             headers = await self.read_headers(reader)
             (request_type, endpoint, parameters) = self.parse_request(request_line)
 
@@ -449,13 +450,13 @@ class CompressorServer(Server):
                     self.response_header(writer)
                     writer.write('{"time":' + str(time.time()) + ',"activity":[')
                     # TODO This should return activity logs that end after since, not those that begin after since.
-                    compressor.activity_log.dump(writer, int(parameters.get('since', 0)))
+                    await compressor.activity_log.dump(writer, int(parameters.get('since', 0)))
                     writer.write(']}')
                 elif endpoint == '/state_logs':
                     # Return all state logs since a value supplied by the caller (or all logs if there is no since)
                     self.response_header(writer)
                     writer.write('{"time":' + str(time.time()) + ',"maxDuration":' + str(compressor.state_log.max_duration) + ',"state":[')
-                    compressor.state_log.dump(writer, int(parameters.get('since', 0)))
+                    await compressor.state_log.dump(writer, int(parameters.get('since', 0)))
                     writer.write(']}')
                 elif endpoint == '/on':
                     shutdown_time = parameters.get("shutdown_in", None)
@@ -469,7 +470,7 @@ class CompressorServer(Server):
                 elif len(parameters) > 0:
                     self.return_json(writer, {'result':'unexpected parameters'}, 400)
                 elif endpoint == '/':
-                    self.return_http_document(writer, self.root_document)
+                    await self.return_http_document(writer, self.root_document)
                 elif endpoint == '/status':
                     self.return_json(writer, compressor.state_dictionary)
                 elif endpoint == '/run':
@@ -484,7 +485,7 @@ class CompressorServer(Server):
                 else:
                     # Not an API endpoint, try to serve the requested document
                     # TODO Need to strip the leading '/' off of the endpoint to get the path
-                    self.return_http_document(writer, endpoint)
+                    await self.return_http_document(writer, endpoint)
             elif request_type == 'POST':
                 if len(parameters) > 0:
                     self.return_json(writer, {'result':'unexpected parameters'}, 400)                

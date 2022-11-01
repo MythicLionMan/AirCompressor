@@ -65,7 +65,9 @@ class Server:
         writer.write(ujson.dumps(obj))
 
     # Returns a file stored in the local file system
-    def return_http_document(self, writer, path, substitutions = None, status = 200):
+    async def return_http_document(self, writer, path, substitutions = None, status = 200):
+        await writer.drain()
+
         try:
             if path.endswith('.html'):
                 content_type = 'text/html'
@@ -79,18 +81,17 @@ class Server:
             self.response_header(writer, content_type = content_type)
 
             f = open(path)
-            if substitutions:
-                # Read the entire document in order to perform substitutions
-                document = f.read()
-                document = document.format(**substitutions)
-                writer.write(document)
-            else:
-                # Transimit the document in chunks to save memory
-                while True:
-                    chunk = f.read(1024)
-                    if chunk == '':
-                        break
-                    writer.write(chunk)
+            # Transimit the document one line at a time to save memory
+            while True:
+                line = f.readline()
+
+                if line == '':
+                    break
+                if substitutions:
+                    line = line.format(**substitutions)
+                    
+                writer.write(line)
+                await writer.drain()
                 
             f.close()    
         except OSError:
@@ -171,6 +172,8 @@ class Server:
                 sys.print_exception(e)
 
             # Sleep for a while, then try to connect again
+            # TODO Won't this cause the server to try to reconnect even when it is already connected?
+            #      That fails when a new sever is started, because the port is already bound.
             await asyncio.sleep(self.settings.network_retry_timeout)
 
     def run(self):

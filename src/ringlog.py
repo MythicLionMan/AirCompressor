@@ -27,8 +27,10 @@ class RingLog:
         # Assign the tuple to the most recent slot
         self[0] = log_tuple
                 
-    # Outputs all entries in the log as tuple pairs without having to allocate one big string
-    def dump(self, writer, since):
+    # Outputs all entries in the log as json pairs without having to allocate one big string
+    async def dump(self, writer, since):
+        await writer.drain()
+        
         first_log = True
         for i in range(self.count):
             log = self[i]
@@ -54,6 +56,7 @@ class RingLog:
                     
                     writer.write('"' + field + '":' + str(value))
                 writer.write("}")
+                await writer.drain()
         
     def __getitem__(self, index):
         wrapped_index = (self.end_index - index) % self.size_limit
