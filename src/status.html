@@ -9,8 +9,9 @@
     <script>
         let compressorActions = new CompressorActions();
         let stateMonitor = new StateMonitor();
-        stateMonitor.startMonitor();
-        monitorChart('compressorTimeline');        
+        let chartMonitor = new ChartMonitor('compressorTimeline');
+        stateMonitor.monitor();
+        chartMonitor.monitor();        
     </script>
     <style>
     #compressorTimelineContainer {{
