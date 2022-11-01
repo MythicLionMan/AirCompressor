@@ -427,10 +427,8 @@ class ChartMonitor {
     }
 
     appendActivityData(data) {
-        const activities = data.activity;
-
-        // Map the times from the server time to the local time
-        activities.forEach((activity, index) => {
+        // Create annotations for activities
+        data.activity.forEach((activity, index) => {
             const start = activity.start*1000 - this.server_time_offset;
             const end = activity.stop*1000 - this.server_time_offset;
 
@@ -438,25 +436,71 @@ class ChartMonitor {
             let colour;
             let type;
             if (activity.event == "R") { // Compressor motor is running
-                colour = 'rgba(66, 245, 209, 0.25)';
-                type = 'box';
+                colour = '66, 245, 209';
             } else if (activity.event == "P") {	// Compressor purge valve is open
-                colour = 'rgba(245, 212, 66, 0.25)';
-                type = 'box';
+                colour = '245, 212, 66';
             } else {
-                colour = 'rgba(230, 230, 230, 0.25)';
-                type = 'line';
+                colour = '230, 230, 230';
             }
             
             // Update the activity details in the annotations table. Note that if an
             // activity is still 'running' (it ends in the future) it may be received
             // multiple times.
             this.chart.options.plugins.annotation.annotations['activity_id_' + activity.start.toString()] = {
-                type: type,
+                type: 'box',
                 xMin: start,
                 xMax: end,
                 yScaleID: 'percent',
-                backgroundColor: colour            
+                backgroundColor: 'rgba(' + colour + ', 0.25)',
+                borderColor: 'rgba(' + colour + ', 0.6)'
+            }
+        });
+        
+        // Create annotations for commands
+        data.commands.forEach((activity, index) => {
+            const time = activity.time*1000 - this.server_time_offset;
+
+            // Choose the colour based on the event type
+            let colour;
+            let labelText;
+            let width = 1;
+            if (activity.command == "O") { // Compressor on
+                colour = 'rgba(0, 255, 0, 1)';
+                labelText = 'On';
+                width = 4;
+            } else if (activity.command == "F") { // Compressor off
+                colour = 'rgba(255, 0, 0, 1)';
+                labelText = 'Off';
+                width = 4;
+            } else if (activity.command == "R") { // Compressor motor run request
+                colour = 'rgba(0, 255, 0, 0.5)';
+                labelText = 'Run';
+            } else if (activity.command == "|") { // Compressor pause request
+                colour = 'rgba(255, 0, 0, 0.5)';
+                labelText = 'Pause';
+            } else {
+                // Either purge, or an unknown command. Do not display.
+                return;
+            }
+            
+            // Update the command details in the annotations table.
+            this.chart.options.plugins.annotation.annotations['command_id_' + activity.time.toString()] = {
+                type: 'line',
+                xMin: time,
+                xMax: time,
+                yScaleID: 'percent',
+                borderColor: colour,
+                borderWidth: width,
+                label: {
+                    content: labelText,
+                    position: 'end',
+                    rotation: 90,
+                    borderWidth: 2,
+                    color: colour,
+                    borderColor: colour,
+                    backgroundColor: 'rgba(255, 255, 255, 255)',
+                    display: true
+                }
             }
         });
     }

@@ -105,7 +105,7 @@ class EventLog(RingLog):
             # Update the log with the current time as the stop time
             self[0] = (start, stop, event)
             self.activity_open = False
-
+            
     def calculate_duty(self, duration):
         now = time.time()
         # Clamp the start of the sample window to 0
@@ -139,6 +139,20 @@ class EventLog(RingLog):
         
         # Return the percentage of the sample window where the compressor was running
         return duty
+    
+COMMAND_ON=const(b'O')
+COMMAND_OFF=const(b'F')
+COMMAND_RUN=const(b'R')
+COMMAND_PAUSE=const(b'|')
+COMMAND_PURGE=const(b'P')
+
+class CommandLog(RingLog):
+    def __init__(self):
+        RingLog.__init__(self, "Ls", ["time", "command"], 10)
+        self.console_log = False
+
+    def log_command(self, event):
+        self.log((time.time(), event))
 
 class StateLog(RingLog):
     def __init__(self, settings):
@@ -164,8 +178,9 @@ class StateLog(RingLog):
 #
 
 class Compressor:
-    def __init__(self, activity_log, settings):
-        self.activity_log = activity_log
+    def __init__(self, settings):
+        self.activity_log = EventLog()
+        self.command_log = CommandLog()
         self.state_log = StateLog(settings)
         
         self.settings = settings
@@ -233,6 +248,7 @@ class Compressor:
     # The next time the compressor is updated it will start to run if it can
     def request_run(self):
         self.request_run_flag = True
+        self.command_log.log_command(COMMAND_RUN)
     
     # Enables the on state. The motor will be automatically turned on and off
     # as needed based on the settings
@@ -241,6 +257,7 @@ class Compressor:
             shutdown_in = self.settings.auto_stop_time
             
         if not self.compressor_is_on:
+            self.command_log.log_command(COMMAND_ON)
             self.compressor_is_on = True
 
             # If the shutdown parameter is > 0, schedule the shutdown relative to now
@@ -249,11 +266,12 @@ class Compressor:
     
     def compressor_off(self):
         # Make sure that the compressor is off
-        self.pause()
+        self._pause()
 
         # If it was active before the call then
         # trigger any stop actions
         if self.compressor_is_on:
+            self.command_log.log_command(COMMAND_OFF)            
             # Clear the active flag and the shutdown time
             self.compressor_is_on = False
             self.shutdown_time = 0
@@ -261,6 +279,7 @@ class Compressor:
             self.purge()
 
     def purge(self, duration = None, delay = None):
+        self.command_log.log_command(COMMAND_PURGE)
         self.purge_task = asyncio.create_task(self._purge(duration, delay))
 
     async def _purge(self, duration, delay):
@@ -273,7 +292,7 @@ class Compressor:
             self.purge_pending = True
             await asyncio.sleep(delay)
             # If the motor is running, stop it
-            self.pause()
+            self._pause()
             
             # Open the drain solenoid
             self.drain_solenoid.value(1)            
@@ -295,6 +314,10 @@ class Compressor:
             self.activity_log.log_start(EVENT_RUN)
 
     def pause(self):
+        self.command_log.log_command(COMMAND_PAUSE)
+        self._pause()
+        
+    def _pause(self):
         self.compressor_motor.value(0)
         self.activity_log.log_stop()
         self.compressor_running = False
@@ -320,7 +343,7 @@ class Compressor:
             self.compressor_off()
 
         if not self.compressor_is_on or self.purge_valve_open or self.purge_pending:
-            self.pause()
+            self._pause()
             return
 
         # If the sensor value is out of range then shut off the motor
@@ -330,11 +353,11 @@ class Compressor:
             self.sensor_error = False
             
         if self.sensor_error:
-            self.pause()
+            self._pause()
             return
             
         if current_time < self.duty_recovery_time:
-            self.pause()
+            self._pause()
             return
         
         if max_duty < 1 and current_duty > max_duty:
@@ -342,7 +365,7 @@ class Compressor:
             # the duty cycle condition is cleared
             self.request_run_flag |= self.compressor_running
 
-            self.pause()
+            self._pause()
             # TODO recovery_time could be calculated by averaging (or taking the  max) of the last few
             #      run cycles. For now it's just a setting
             self.duty_recovery_time = current_time + self.settings.recovery_time
@@ -352,7 +375,7 @@ class Compressor:
             return
 
         if current_pressure > self.settings.stop_pressure:
-            self.pause()
+            self._pause()
         elif current_pressure < self.settings.start_pressure or self.request_run:
             self.request_run_flag = False
             self._run_motor()
@@ -451,6 +474,9 @@ class CompressorServer(Server):
                     writer.write('{"time":' + str(time.time()) + ',"activity":[')
                     # Return all activity logs that end after since
                     await compressor.activity_log.dump(writer, int(parameters.get('since', 0)), 1)
+                    writer.write('],"commands":[')
+                    # Return all command logs that fired after since
+                    await compressor.command_log.dump(writer, int(parameters.get('since', 0)))
                     writer.write(']}')
                 elif endpoint == '/state_logs':
                     # Return all state logs since a value supplied by the caller (or all logs if there is no since)
@@ -526,10 +552,9 @@ class CompressorServer(Server):
 
 async def main():
     settings = CompressorSettings(default_settings)
-    activity_log = EventLog()
     
     # Run the compressor no matter what. It is essential that the compressor pressure is monitored
-    compressor = Compressor(activity_log, settings)
+    compressor = Compressor(settings)
     compressor.run()
     
     if settings.compressor_on_power_up:
