@@ -7,8 +7,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/2.0.1/chartjs-plugin-annotation.min.js"></script>
     <script src="utils.js"></script>
     <script>
-        monitorState();
-        monitorChart('compressorTimeline');
+        let compressorActions = new CompressorActions();
+        let stateMonitor = new StateMonitor();
+        stateMonitor.startMonitor();
+        monitorChart('compressorTimeline');        
     </script>
     <style>
     #compressorTimelineContainer {{
@@ -38,6 +40,11 @@
             <tr><td>Duty 10 Minutes</td><td id="duty_10">{duty_10}</td></tr>
             <tr><td>Duty 60 Minutes</td><td id="duty_60">{duty_60}</td></tr>
         </table>
+        <div>
+            <button id="on_button" onclick="compressorActions.turnOn()">Turn On</button>
+            <button id="off_button" onclick="compressorActions.turnOff()">Turn Off</button>
+            <button id="purge_button" onclick="compressorActions.purge()">Purge</button>
+        </div>
         <h2>Settings <a href="editSettings.html">Edit</a></h2>
         <table>
             <tr><td>Start Pressure</td><td>{start_pressure}</td></tr>

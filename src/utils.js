@@ -1,83 +1,141 @@
-function submitSettings(formID, success = null, failure = null) {
-    // Convert the form to json
-    const formData = new FormData(document.getElementById(formID))
-    var data = {};
-    formData.forEach((value, key) => data[key] = value);
+class CompressorActions {
+    submitSettings(formID) {
+        // Convert the form to json
+        const formData = new FormData(document.getElementById(formID))
+        var data = {};
+        formData.forEach((value, key) => data[key] = value);
+                
+        this.submitToEndpoint('POST', '/settings', data, 'Server did not accept settings.')
+    }
     
-    let failureWrapper = function() {
-        if (failure) {
-            failure();
-        } else {
-            alert('Error updating settings');
-        }
+    turnOn() {
+        this.submitToEndpoint('GET', '/on', {}, 'Server did not turn on.')
     }
 
-    let successWrapper = function() {
-       console.log('Settings updated succesfully');
+    turnOff() {
+        this.submitToEndpoint('GET', '/off', {}, 'Server did not turn off.')
+    }
+
+    purge() {
+        this.submitToEndpoint('GET', '/on', {}, 'Server did not purge.')    
+    }
     
-        if (success) {
-            success();
-        } else {
+    submitToEndpoint(method, endpoint, bodyData, errorMessage) {
+        // Submit to the server
+        fetch(endpoint, {
+           method: method, 
+           headers: {
+               'Accept': 'application/json',
+               'Content-Type': 'application/json'
+           },
+           body: JSON.stringify(bodyData)
+        })
+        .then((response) => response.json())
+        .then((data) => {
+           if (data['result'] == 'ok') {
+               this.callSuccess();
+           } else {
+               console.log('Error updating remote')       
+               this.callFailure(errorMessage);
+           }
+        })
+        .catch((error) => {
+           console.error('Communication Error:', error);
+           this.callFailure('Error sending or handling request. ' + error.toString());
+        });
+    }
+    
+    callSuccess() {
+        if (!this.success()) {
             alert('Settings Updated');
         }
     }
-
-    // Submit to the server
-    fetch('/settings', {
-       method: 'POST', 
-       headers: {
-           'Accept': 'application/json',
-           'Content-Type': 'application/json'
-       },
-       body: JSON.stringify(data)
-    })
-    .then((response) => response.json())
-    .then((data) => {
-       if (data['result'] == 'ok') {
-           successWrapper();
-       } else {
-           console.log('Error updating remote')       
-           failureWrapper();
-       }
-    })
-    .catch((error) => {
-       console.error('Communication Error:', error);
-       failureWrapper();
-    });
-}
-
-var stateMonitorId = null;
-function monitorState(interval = 5000) {
-    if (interval == 0) {
-        if (stateMonitorId) {
-            clearInterval(stateMonitorId);
-            stateMonitorId = null;
+    
+    callFailure(endpoint) {
+        if (!this.failure(endpoint, message)) {
+            alert(message);
         }
-    } else {
-        stateMonitorId = setInterval(fetchState, interval);
     }
+    
+    success() {
+        return false;
+    }
+
+    failure(endpoint, message) {
+        return false;
+    }    
 }
 
-function fetchState() {
-    // Query the server
-    fetch('/status', {
-       method: 'GET', 
-       headers: {
-           'Accept': 'application/json',
-       }
-    })
-    .then((response) => response.json())
-    .then((data) => {
+class StateMonitor {
+    constructor() {
+        this.monitorId = null;
+    }
+    
+    // Begins periodically polling the server for the state of self
+    startMonitor(interval = 5000) {
+        if (interval == 0) {
+            if (this.monitorId) {
+                clearInterval(this.monitorId);
+                this.monitorId = null;
+            }
+        } else {
+            var t = this;
+            this.monitorId = setInterval(function(){t.fetchState();}, interval);
+        }
+    }
+    
+    stopMonitor() {
+        if (this.monitorId) {
+            clearInterval(this.monitorId);
+            this.monitorId = null;
+        }
+    }
+
+    // Updates the state of the document based on a json state description
+    // received from the server. Derived classes may overload this method
+    // to disable default functionality, or to extend it.
+    updateState(state) {
+        this.updateHTMLWithCompressorState(state);
+        this.updateButtonsWithCompressorState(state);
+    }
+
+    // Updates the document HTML with a state dictionary by assigning values
+    // to the html element with the same key.
+    updateHTMLWithCompressorState(state) {
         // Copy the state data to the html elements whose id matches
         // the keys fetched in the state dictionary
-        for (const [key, value] of Object.entries(data)) {        
-            element = document.getElementById(key);
-            if (element) element.innerHTML = value;
+        for (const [key, value] of Object.entries(state)) {        
+            var element = document.getElementById(key);
+            if (element) element.innerHTML = this.map(key, value);
         };
-    })
-    .catch((error) => {
-       console.error('Communication Error:', error);
-    });
+    }
+    
+    // Hides/shows buttons based on a state dictionary. Derived classes may 
+    // overload this method to control how buttons are configured.
+    updateButtonsWithCompressorState(state) {
+    }
+    
+    // Maps a state value from the json state definition to an HTML value.
+    // Derived classes can overload this to provide a different mapping.
+    map(key, value) {
+        return value;
+    }
+
+    // Initiates a fetch and calls updateState with the result
+    fetchState() {
+        // Query the server
+        fetch('/status', {
+           method: 'GET', 
+           headers: {
+               'Accept': 'application/json',
+           }
+        })
+        .then((response) => response.json())
+        .then((data) => this.updateState(data))
+        .catch((error) => {
+           console.error('Communication Error:', error);
+        });
+    }
 }
 
 chartMonitorId = null;
