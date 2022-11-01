@@ -342,7 +342,8 @@ class ChartMonitor {
         console.log('Updating chart…');
         let t = this;
         
-        // Query the server for state logs
+        // Query the server for state logs that are after the last state
+        // query that we made
         fetch('/state_logs?since=' + this.last_state_update.toString(), {
            method: 'GET', 
            headers: {
@@ -355,7 +356,8 @@ class ChartMonitor {
            console.error('Communication Error Fetching State:', error);
         });
 
-        // Query the server for activity logs
+        // Query the server for activity logs that end after the last 
+        // update that we received.
         fetch('/activity_logs?since=' + this.last_activity_update.toString(), {
            method: 'GET', 
            headers: {
@@ -371,6 +373,7 @@ class ChartMonitor {
 
     processStateData(data) {
         // Store the current server time (in the server timescale)
+        // so that we don't refetch activity
         this.last_state_update = data['time'];
         
         // Calculate when the chart should end (in the local timescale)
@@ -409,15 +412,12 @@ class ChartMonitor {
 
     processActivity(data) {
         // Store the current server time (in the server timescale)
-        // TODO If the query is limited then events that have been received in the
-        //      past but have been updated are not returned. This leaves every activity
-        //      unterminated. Activities that have been modified need to be refetched.
-        //      This is because activities can be modified, unlike other logs. One solution
-        //      would be to fetch based on modified time, rather than activity time. Another
-        //      would be to fetch based on stop time rather than modified time.
-        //      Always fetching all activities is somewhat expensive, since every query
-        //      will return the full buffer.
-        this.last_activity_update = 0;//data['time'];
+        // so that we don't refetch events that have been received
+        // in their entirety. Note that activity events are fetched
+        // based on their end time, which may be in the future, so
+        // the same event may be received multiple times while it is
+        // running.
+        this.last_activity_update = data['time'];
                 
         // Append the new data to the chart
         this.appendActivityData(data);
@@ -436,17 +436,23 @@ class ChartMonitor {
 
             // Choose the colour based on the event type
             let colour;
+            let type;
             if (activity.event == "R") { // Compressor motor is running
                 colour = 'rgba(66, 245, 209, 0.25)';
+                type = 'box';
             } else if (activity.event == "P") {	// Compressor purge valve is open
                 colour = 'rgba(245, 212, 66, 0.25)';
+                type = 'box';
             } else {
                 colour = 'rgba(230, 230, 230, 0.25)';
+                type = 'line';
             }
             
-            // Update the activity details in the annotations table
+            // Update the activity details in the annotations table. Note that if an
+            // activity is still 'running' (it ends in the future) it may be received
+            // multiple times.
             this.chart.options.plugins.annotation.annotations['activity_id_' + activity.start.toString()] = {
-                type: 'box',
+                type: type,
                 xMin: start,
                 xMax: end,
                 yScaleID: 'percent',

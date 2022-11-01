@@ -449,8 +449,8 @@ class CompressorServer(Server):
                     # Return all state logs since a value supplied by the caller (or all logs if there is no since)
                     self.response_header(writer)
                     writer.write('{"time":' + str(time.time()) + ',"activity":[')
-                    # TODO This should return activity logs that end after since, not those that begin after since.
-                    await compressor.activity_log.dump(writer, int(parameters.get('since', 0)))
+                    # Return all activity logs that end after since
+                    await compressor.activity_log.dump(writer, int(parameters.get('since', 0)), 1)
                     writer.write(']}')
                 elif endpoint == '/state_logs':
                     # Return all state logs since a value supplied by the caller (or all logs if there is no since)

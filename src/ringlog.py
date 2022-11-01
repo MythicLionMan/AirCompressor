@@ -28,13 +28,13 @@ class RingLog:
         self[0] = log_tuple
                 
     # Outputs all entries in the log as json pairs without having to allocate one big string
-    async def dump(self, writer, since):
+    async def dump(self, writer, since, filter_index = 0):
         await writer.drain()
         
         first_log = True
         for i in range(self.count):
             log = self[i]
-            if log[0] > since:
+            if log[filter_index] >= since:
                 if not first_log:
                     writer.write(",")
                 first_log = False
@@ -45,6 +45,7 @@ class RingLog:
                     if not first_field:
                         writer.write(",")
                     first_field = False
+                    
                     # Value may be a binary string. If it is it's string representation
                     # will not be valid json (it will be represented as b'value'). Try
                     # to decode it, and if that fails asume that it's a type with a valid
