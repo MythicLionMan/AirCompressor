@@ -31,14 +31,20 @@
                 <button onclick="chartMonitor.setChartDurationIndex(2)">Long</button>
                 
                 <label for="show_tank_pressure">
-                    <input type="checkbox" id="show_tank_pressure" checked onclick="chartMonitor.setSeriesVisiblity(this.checked, 0)" />Tank Pressure
+                    <input type="checkbox" id="show_tank_pressure" checked onclick="chartMonitor.setSeriesVisibility(this.checked, 0)" />Tank Pressure
                 </label>                
                 <label for="show_line_pressure">
-                    <input type="checkbox" id="show_line_pressure" checked onclick="chartMonitor.setSeriesVisiblity(this.checked, 1)" />Line Pressure
+                    <input type="checkbox" id="show_line_pressure" checked onclick="chartMonitor.setSeriesVisibility(this.checked, 1)" />Line Pressure
                 </label>
                 <label for="show_duty">
-                    <input type="checkbox" id="show_duty" checked onclick="chartMonitor.setSeriesVisiblity(this.checked, 2)" />Duty
+                    <input type="checkbox" id="show_duty" checked onclick="chartMonitor.setSeriesVisibility(this.checked, 2)" />Duty
                 </label>
+                <label for="show_activity">
+                    <input type="checkbox" id="show_activity" checked onclick="chartMonitor.setActivityVisibility(this.checked)" />Activity
+                </label>                
+                <label for="show_commands">
+                    <input type="checkbox" id="show_commands" checked onclick="chartMonitor.setCommandVisibility(this.checked)" />Commands
+                </label>                
             </div>
         </div>
         <h2>State</h2>

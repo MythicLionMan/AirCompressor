@@ -186,6 +186,9 @@ class ChartMonitor {
         this.last_activity_update = 0;
         this.server_time_offset = null;
 
+        this.activitiesVisible = true;
+        this.commandsVisible = true;
+
         this.setChartDurationIndex(0);
 
         if (document.readyState === 'complete') {
@@ -225,9 +228,33 @@ class ChartMonitor {
         }
     }
         
-    setSeriesVisiblity(visible, index) {
+    setSeriesVisibility(visible, index) {
         this.chart.data.datasets[index].hidden = !visible;
         this.chart.update()        
+    }
+    
+    setActivityVisibility(visible) {
+        this.activitiesVisible = visible;
+
+        // Update existing activity annotations
+        for (const [key, annotation] of Object.entries(this.chart.options.plugins.annotation.annotations)) {
+            if (key.startsWith('activity_id_')) {
+                annotation.display = visible;
+            }
+        };
+        this.chart.update();
+    }
+    
+    setCommandVisibility(visible) {
+        this.commandsVisible = visible;
+        
+        // Update existing command annotations
+        for (const [key, annotation] of Object.entries(this.chart.options.plugins.annotation.annotations)) {
+            if (key.startsWith('command_id_')) {
+                annotation.display = visible;
+            }
+        };
+        this.chart.update();
     }
     
     getDutyGradient(ctx, chartArea) {
@@ -448,6 +475,7 @@ class ChartMonitor {
             // multiple times.
             this.chart.options.plugins.annotation.annotations['activity_id_' + activity.start.toString()] = {
                 type: 'box',
+                display: this.activitiesVisible,
                 xMin: start,
                 xMax: end,
                 yScaleID: 'percent',
@@ -486,6 +514,7 @@ class ChartMonitor {
             // Update the command details in the annotations table.
             this.chart.options.plugins.annotation.annotations['command_id_' + activity.time.toString()] = {
                 type: 'line',
+                display: this.commandsVisible,                
                 xMin: time,
                 xMax: time,
                 yScaleID: 'percent',
