@@ -5,6 +5,10 @@ settings = {
 };
 
 class CompressorActions {
+    constructor(stateMonitor) {
+        this.stateMonitor = stateMonitor;
+    }
+    
     submitSettings(formID) {
         // Convert the form to json
         const formData = new FormData(document.getElementById(formID))
@@ -70,6 +74,8 @@ class CompressorActions {
         }
             
         this.success(endpoint, messages[endpoint]);
+        // Refetch the state to update the UI
+        this.stateMonitor.fetchState();
     }
     
     callFailure(endpoint) {
@@ -141,6 +147,11 @@ class StateMonitor {
     // Hides/shows buttons based on a state dictionary. Derived classes may 
     // overload this method to control how buttons are configured.
     updateButtonsWithCompressorState(state) {
+        document.getElementById('on_button').hidden = state.compressor_on;
+        document.getElementById('off_button').hidden = !state.compressor_on;
+        document.getElementById('pause_button').hidden = !state.compressor_motor_running;
+        document.getElementById('run_button').hidden = state.compressor_motor_running;
+        document.getElementById('purge_button').hidden = state.compressor_motor_running;
     }
     
     // Maps a state value from the json state definition to an HTML value.
