@@ -186,6 +186,11 @@ class ChartMonitor {
             }
         }
     }
+        
+    setSeriesVisiblity(visible, index) {
+        this.chart.data.datasets[index].hidden = !visible;
+        this.chart.update()        
+    }
     
     getDutyGradient(ctx, chartArea) {
         const chartWidth = chartArea.right - chartArea.left;
