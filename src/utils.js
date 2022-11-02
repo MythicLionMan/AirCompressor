@@ -276,6 +276,10 @@ class ChartMonitor {
 
     configureChart(ctx) {
         console.log('Document is ready, setting up chart');
+
+        // All of the state data will be appended to this array
+        this.stateData = [];
+        
         let t = this;
         this.chart = new Chart(ctx, {
             type: 'scatter',
@@ -283,19 +287,40 @@ class ChartMonitor {
                 datasets: [{
                     label: 'Tank Pressure',
                     showLine: true,
-                    data: [],
+                    data: this.stateData,
+                    parsing: {
+                        yAxisKey: 'tank_pressure',
+                        xAxisKey: 'time'
+                    },
+                    tooltip: {
+                        callbacks: { label: function(context) { return context.dataset.label + ' ' + context.parsed.y + ' PSI'; } }
+                    },
                     yAxisID: 'pressure',
                     borderColor: '#FF0000'
                 },{
                     label: 'Line Pressure',
                     showLine: true,
-                    data: [],
+                    data: this.stateData,
+                    parsing: {
+                        yAxisKey: 'line_pressure',
+                        xAxisKey: 'time'
+                    },
+                    tooltip: {
+                        callbacks: { label: function(context) { return context.dataset.label + ' ' + context.parsed.y + ' PSI'; } }
+                    },
                     yAxisID: 'pressure',
                     borderColor: '#FFFF00'
                 },{
                     label: 'Duty',
                     showLine: true,
-                    data: [],
+                    data: this.stateData,
+                    parsing: {
+                        yAxisKey: 'duty',
+                        xAxisKey: 'time'
+                    },
+                    tooltip: {
+                        callbacks: { label: function(context) { return context.dataset.label + ' ' + context.parsed.y + '%'; } }
+                    },
                     yAxisID: 'percent',
                     borderColor: function(context) {
                         const chart = context.chart;
@@ -321,19 +346,34 @@ class ChartMonitor {
                         display: true,
                         position: 'left',
                         min: 0,
-                        max: 150
+                        max: 150,
+                        title: {
+                            display: true,
+                            text: 'Pounds per Square Inch'
+                        }
                     },
                     percent: {
                         type: 'linear',
                         display: true,
                         position: 'right',
                         min: 0,
-                        max: 1,
+                        max: 100,
 
                         // grid line settings
                         grid: {
                             drawOnChartArea: false, // only want the grid lines for one axis to show up
                         },
+                        ticks: {
+                            min: 0,
+                            max: 100,
+                            callback: function(value) {
+                                return value + "%";
+                            }
+                        },
+                        scaleLabel: {
+                            display: true,
+                            labelString: "Percent"
+                        }
                     },
                     x: {
                         type: 'time',
@@ -423,18 +463,14 @@ class ChartMonitor {
         // The data arrives with the most recent log first. Reverse it to append to the end.
         let states = data.state.reverse();
         // Map the times from the server time to the local time
+        // and map percentages from 0 - 1 to 0 - 100
         states.forEach((state, index) => {
             state.time = state.time*1000 - this.server_time_offset;
+            state.duty *= 100;
         });
-        // Convert to x/y values for different datasets
-        let tankPressures = states.map((state) => { return { x: state.time, y: state.tank_pressure}});
-        let linePressures = states.map((state) => { return { x: state.time, y: state.line_pressure}});
-        let dutyData = states.map((state) => { return { x: state.time, y: state.duty}});
         
         // Append the new data to the datasets
-        this.chart.data.datasets[0].data.push(...tankPressures);
-        this.chart.data.datasets[1].data.push(...linePressures);
-        this.chart.data.datasets[2].data.push(...dutyData);
+        this.stateData.push(...states);
     }
 
     processActivity(data) {
