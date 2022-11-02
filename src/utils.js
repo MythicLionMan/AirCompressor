@@ -396,6 +396,12 @@ class ChartMonitor {
                     annotation: {
                         annotations: {
                         }
+                    },
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true
+                        }
                     }
                 }
                 
