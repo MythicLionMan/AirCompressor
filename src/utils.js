@@ -106,8 +106,10 @@ class CompressorActions {
 }
 
 class StateMonitor {
-    constructor() {
+    constructor(errorId) {
         this.monitorId = null;
+        this.errorId = errorId;
+        this.errorOriginalHTML = null;
     }
     
     // Begins periodically polling the server for the state of self
@@ -170,10 +172,38 @@ class StateMonitor {
            }
         })
         .then((response) => response.json())
-        .then((data) => this.updateState(data))
+        .then((data) => {
+            this.clearError();
+            this.updateState(data);
+        })
         .catch((error) => {
            console.error('Communication Error:', error);
+           this.displayError(error);
         });
+    }
+    
+    clearError() {
+        if (this.errorId) {
+            let element = document.getElementById(this.errorId);
+            if (!element.hidden && this.errorOriginalHTML) {
+                element.hidden = true;
+                element.innerHTML = this.errorOriginalHTML;
+                this.errorOriginalHTML = null;
+            }
+        }
+    }
+    
+    displayError(error) {
+        if (this.errorId) {
+            let element = document.getElementById(this.errorId);
+            
+            if (element.hidden) {
+                this.errorOriginalHTML = element.innerHTML;
+                const now = Date();
+                element.innerHTML = this.errorOriginalHTML + now.toLocaleString();
+                element.hidden = false;
+            }
+        }
     }
 }
 
@@ -290,7 +320,6 @@ class ChartMonitor {
                     data: this.stateData,
                     parsing: {
                         yAxisKey: 'tank_pressure',
-                        xAxisKey: 'time'
                     },
                     tooltip: {
                         callbacks: { label: function(context) { return context.dataset.label + ' ' + context.parsed.y + ' PSI'; } }
@@ -303,7 +332,6 @@ class ChartMonitor {
                     data: this.stateData,
                     parsing: {
                         yAxisKey: 'line_pressure',
-                        xAxisKey: 'time'
                     },
                     tooltip: {
                         callbacks: { label: function(context) { return context.dataset.label + ' ' + context.parsed.y + ' PSI'; } }
@@ -316,7 +344,6 @@ class ChartMonitor {
                     data: this.stateData,
                     parsing: {
                         yAxisKey: 'duty',
-                        xAxisKey: 'time'
                     },
                     tooltip: {
                         callbacks: { label: function(context) { return context.dataset.label + ' ' + context.parsed.y + '%'; } }
@@ -340,6 +367,13 @@ class ChartMonitor {
                         radius: 0
                     }
                 },
+                parsing: {
+                    xAxisKey: 'time'
+                },
+                //animation: {
+                //    duration: settings.chartQueryInterval,
+                //    easing: 'linear'
+                //},
                 scales: {
                     pressure: {
                         type: 'linear',
@@ -407,7 +441,7 @@ class ChartMonitor {
                 
             }
         });
-        
+
         this.updateDomain();
     }
 

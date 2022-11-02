@@ -7,7 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/2.0.1/chartjs-plugin-annotation.min.js"></script>
     <script src="utils.js"></script>
     <script>
-        let stateMonitor = new StateMonitor();
+        let stateMonitor = new StateMonitor('stateUpdateError');
         let compressorActions = new CompressorActions(stateMonitor);
         let chartMonitor = new ChartMonitor('compressorTimeline');
         stateMonitor.monitor();
@@ -39,6 +39,7 @@
             </div>
         </div>
         <h2>State</h2>
+        <div id='stateUpdateError' hidden>Warning: server has not responded since </div>
         <table>
             <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
             <tr><td>Tank Pressure</td><td id="tank_pressure">{tank_pressure}</td></tr>
