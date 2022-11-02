@@ -229,7 +229,7 @@ class ChartMonitor {
     }
         
     setSeriesVisibility(visible, index) {
-        this.chart.data.datasets[index].hidden = !visible;
+        this.chart.setDatasetVisibility(index, visible);
         this.chart.update()        
     }
     
