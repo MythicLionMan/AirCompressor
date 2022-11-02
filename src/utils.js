@@ -469,6 +469,15 @@ class ChartMonitor {
             state.duty *= 100;
         });
         
+        if (this.stateData.length) {
+            // There is a chance that the query returns some values that we
+            // already have. Remove any new elements that are older than the 
+            // end of the existing data
+            while (states.length && this.stateData[this.stateData.length - 1].time >= states[0].time) {
+                states.shift();
+            }
+        }
+        
         // Append the new data to the datasets
         this.stateData.push(...states);
     }
