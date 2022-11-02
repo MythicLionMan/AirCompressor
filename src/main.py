@@ -531,6 +531,9 @@ class CompressorServer(Server):
                     self.return_json(writer, {'result':'unknown endpoint'}, 404)
             else:
                 self.return_json(writer, {'result':'unknown method'}, 404)
+        except Exception as e:
+            print("Error handling request.")
+            sys.print_exeception(e)
         finally:
             await writer.drain()
             await writer.wait_closed()

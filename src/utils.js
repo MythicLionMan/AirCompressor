@@ -110,6 +110,7 @@ class StateMonitor {
         this.monitorId = null;
         this.errorId = errorId;
         this.errorOriginalHTML = null;
+        this.server_time_offset = null;
     }
     
     // Begins periodically polling the server for the state of self
@@ -159,7 +160,30 @@ class StateMonitor {
     // Maps a state value from the json state definition to an HTML value.
     // Derived classes can overload this to provide a different mapping.
     map(key, value) {
+        if (key == 'system_time') {
+            value = new Date(value * 1000);
+            return value.toLocaleTimeString();        
+        } else if (key == 'shutdown' || key == 'duty_recovery_time') {
+            // A value of 0 means that the time is not set
+            if (value == 0) {
+                return 'never';
+            }
+
+            value = new Date(value * 1000 - this.server_time_offset);
+            return value.toLocaleTimeString();
+        } else if (key == 'duty_10' || key == 'duty_60') {
+            return Math.round(value * 100).toString() + '%';
+        } else if (key == 'tank_pressure' || key == 'line_pressure') {
+            return value.toFixed(2);
+        }
         return value;
+    }
+    
+    synchronizeTime(data) {
+        if (this.server_time_offset === null) {
+            this.server_time_offset = data['system_time'] * 1000 - Date.now();
+            console.log('StateMonitor.sever_time_offset = ' + this.server_time_offset.toString());
+        }
     }
 
     // Initiates a fetch and calls updateState with the result
@@ -174,6 +198,7 @@ class StateMonitor {
         .then((response) => response.json())
         .then((data) => {
             this.clearError();
+            this.synchronizeTime(data);
             this.updateState(data);
         })
         .catch((error) => {
@@ -199,8 +224,8 @@ class StateMonitor {
             
             if (element.hidden) {
                 this.errorOriginalHTML = element.innerHTML;
-                const now = Date();
-                element.innerHTML = this.errorOriginalHTML + now.toLocaleString();
+                const now = new Date();
+                element.innerHTML = this.errorOriginalHTML + now.toLocaleTimeString();
                 element.hidden = false;
             }
         }
@@ -488,7 +513,7 @@ class ChartMonitor {
         
         if (this.server_time_offset === null) {
             this.server_time_offset = domainEnd - Date.now();
-            console.log(this.server_time_offset);
+            console.log('ChartMonitor.server_time_offset = ' + this.server_time_offset.toString());
         }
         // Append the new data to the chart
         this.appendStateData(data);
