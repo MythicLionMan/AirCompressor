@@ -75,6 +75,8 @@ class Server:
                 content_type = 'script/javascript'
             elif path.endswith('.json'):
                 content_type = 'application/json'
+            elif path.endswith('.css'):
+                content_type = 'text/css'
             else:
                 content_type = 'text/plain'
 
@@ -164,6 +166,7 @@ class Server:
                 print('Starting webserver...')
                 if self.asynchronous:
                     self.server = await asyncio.start_server(self.serve_client, "0.0.0.0", 80)
+                    print('Server has started and is waiting for requests.')
                 else:
                     self._run_blocking()
                     print('Webserver is done. Bye bye.')
