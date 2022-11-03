@@ -109,6 +109,7 @@ class StateMonitor {
     constructor(lastUpdateTimeId) {
         this.monitorId = null;
         this.server_time_offset = null;
+        this.fetchPending = false;
         
         this.lastUpdateTimeElement = lastUpdateTimeId ? document.getElementById(lastUpdateTimeId) : null;
         this.stateElements = Array.from(document.getElementsByClassName('undefined_state'));
@@ -126,6 +127,7 @@ class StateMonitor {
         } else {
             let t = this;
             this.monitorId = setInterval(function(){t.fetchState();}, interval);
+            this.fetchState();
         }
     }
     
@@ -208,6 +210,10 @@ class StateMonitor {
 
     // Initiates a fetch and handles the result
     fetchState() {
+        if (this.fetchPending) return;
+        this.fetchPending = true;
+        let t = this;
+        
         // Query the server
         fetch('/status', {
            method: 'GET', 
@@ -216,8 +222,9 @@ class StateMonitor {
            }
         })
         .then((response) => response.json())
-        .then((data) => this.handleFetchStateResponse(data))
-        .catch((error) => this.handleFetchStateError(error));
+        .then((data) => t.handleFetchStateResponse(data))
+        .catch((error) => t.handleFetchStateError(error))
+        .finally(() => { t.fetchPending = false; });
     }
     
     handleFetchStateResponse(data) {
@@ -252,6 +259,9 @@ class ChartMonitor {
         this.activitiesVisible = true;
         this.commandsVisible = true;
 
+        this.stateFetchPending = false;
+        this.activityFetchPending = false;
+        
         this.setChartDurationIndex(0);
 
         // Create the chart
@@ -269,6 +279,7 @@ class ChartMonitor {
         } else {
             let t = this;
             this.monitorId = setInterval(function(){ t.updateChart() }, interval);
+            this.updateChart();
         }
     }
 
@@ -475,33 +486,39 @@ class ChartMonitor {
         console.log('Updating chart…');
         let t = this;
         
-        // Query the server for state logs that are after the last state
-        // query that we made
-        fetch('/state_logs?since=' + this.last_state_update.toString(), {
-           method: 'GET', 
-           headers: {
-               'Accept': 'application/json',
-           }
-        })
-        .then((response) => response.json())
-        .then((data) => { t.processStateData(data); })
-        .catch((error) => {
-           console.error('Communication Error Fetching State:', error);
-        });
-
+        if (!this.stateFetchPending) {
+            this.stateFetchPending = true;
+            
+            // Query the server for state logs that are after the last state
+            // query that we made
+            fetch('/state_logs?since=' + this.last_state_update.toString(), {
+               method: 'GET', 
+               headers: {
+                   'Accept': 'application/json',
+               }
+            })
+            .then((response) => response.json())
+            .then((data) => { t.processStateData(data); })
+            .catch((error) => { console.error('Communication Error Fetching State:', error); })
+            .finally(() => { t.stateFetchPending = false; });
+        }
+        
         // Query the server for activity logs that end after the last 
         // update that we received.
-        fetch('/activity_logs?since=' + this.last_activity_update.toString(), {
-           method: 'GET', 
-           headers: {
-               'Accept': 'application/json',
-           }
-        })
-        .then((response) => response.json())
-        .then((data) => { t.processActivity(data); })
-        .catch((error) => {
-           console.error('Communication Error Fetching Activity:', error);
-        });
+        if (!this.activityFetchPending) {
+            this.activityFetchPending = true;
+                
+            fetch('/activity_logs?since=' + this.last_activity_update.toString(), {
+               method: 'GET', 
+               headers: {
+                   'Accept': 'application/json',
+               }
+            })
+            .then((response) => response.json())
+            .then((data) => { t.processActivity(data); })
+            .catch((error) => { console.error('Communication Error Fetching Activity:', error); })
+            .finally(() => { t.activityFetchPending = false; });
+        }
     }
 
     processStateData(data) {
