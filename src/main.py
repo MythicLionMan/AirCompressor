@@ -454,13 +454,9 @@ class CompressorServer(Server):
                     if drain_duration:
                         drain_duration = int(drain_duration)
 
-                    drain_duration = parameters.get("drain_delay", None)
+                    drain_delay = parameters.get("drain_delay", None)
                     if drain_delay:
                         drain_delay = int(drain_delay)
-
-                    shutdown_time = parameters.get("shutdown_in", None)
-                    if shutdown_time:
-                        shutdown_time = int(shutdown_time)
 
                     compressor.purge(drain_duration, drain_delay)
                     self.return_ok(writer)
