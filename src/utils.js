@@ -106,11 +106,12 @@ class CompressorActions {
 }
 
 class StateMonitor {
-    constructor(errorId) {
+    constructor(lastUpdateTimeId) {
         this.monitorId = null;
-        this.errorId = errorId;
-        this.errorOriginalHTML = null;
         this.server_time_offset = null;
+        
+        this.lastUpdateTimeElement = lastUpdateTimeId ? document.getElementById(lastUpdateTimeId) : null;
+        this.stateElements = Array.from(document.getElementsByClassName('undefined_state'));
     }
     
     // Begins periodically polling the server for the state of self
@@ -133,7 +134,7 @@ class StateMonitor {
     // to disable default functionality, or to extend it.
     updateState(state) {
         this.updateHTMLWithCompressorState(state);
-        this.updateButtonsWithCompressorState(state);
+        this.updateClassesWithCompressorState(state);
     }
 
     // Updates the document HTML with a state dictionary by assigning values
@@ -146,17 +147,36 @@ class StateMonitor {
             if (element) element.innerHTML = this.map(key, value);
         };
     }
-    
-    // Hides/shows buttons based on a state dictionary. Derived classes may 
-    // overload this method to control how buttons are configured.
-    updateButtonsWithCompressorState(state) {
-        document.getElementById('on_button').hidden = state.compressor_on;
-        document.getElementById('off_button').hidden = !state.compressor_on;
-        document.getElementById('pause_button').hidden = !state.compressor_motor_running;
-        document.getElementById('run_button').hidden = state.compressor_motor_running;
-        document.getElementById('purge_button').hidden = state.compressor_motor_running;
+
+    removeStateClass(stateName) {
+        for (let element of this.stateElements) {
+            element.classList.remove(stateName);
+        }
+    }
+
+    addStateClass(stateName) {
+        for (let element of this.stateElements) {
+            element.classList.add(stateName);
+        }
     }
     
+    // Updates the html classes that are assigned to elements with a state
+    // class.
+    updateClassesWithCompressorState(state) {
+        let stateClassNames = ['compressor_on', 'run_request', 'compressor_motor_running', 'purge_pending', 'purge_open'];
+        
+        for (let element of this.stateElements) {
+            element.classList.remove('undefined_state');
+            for (const className of stateClassNames) {
+                if (state[className]) {
+                    element.classList.add(className);
+                } else {
+                    element.classList.remove(className);                
+                }
+            }
+        }    
+    }
+        
     // Maps a state value from the json state definition to an HTML value.
     // Derived classes can overload this to provide a different mapping.
     map(key, value) {
@@ -186,7 +206,7 @@ class StateMonitor {
         }
     }
 
-    // Initiates a fetch and calls updateState with the result
+    // Initiates a fetch and handles the result
     fetchState() {
         // Query the server
         fetch('/status', {
@@ -196,39 +216,27 @@ class StateMonitor {
            }
         })
         .then((response) => response.json())
-        .then((data) => {
-            this.clearError();
-            this.synchronizeTime(data);
-            this.updateState(data);
-        })
-        .catch((error) => {
-           console.error('Communication Error:', error);
-           this.displayError(error);
-        });
+        .then((data) => this.handleFetchStateResponse(data))
+        .catch((error) => this.handleFetchStateError(error));
     }
     
-    clearError() {
-        if (this.errorId) {
-            let element = document.getElementById(this.errorId);
-            if (!element.hidden && this.errorOriginalHTML) {
-                element.hidden = true;
-                element.innerHTML = this.errorOriginalHTML;
-                this.errorOriginalHTML = null;
-            }
-        }
+    handleFetchStateResponse(data) {
+        this.removeStateClass('compressor_error');
+        
+        // Update the time when the last succesful update was received
+        if (this.lastUpdateTimeElement) {
+            const now = new Date();
+            this.lastUpdateTimeElement.innerHTML = now.toLocaleTimeString();
+        }                
+
+        this.synchronizeTime(data);
+        this.updateState(data);
     }
     
-    displayError(error) {
-        if (this.errorId) {
-            let element = document.getElementById(this.errorId);
-            
-            if (element.hidden) {
-                this.errorOriginalHTML = element.innerHTML;
-                const now = new Date();
-                element.innerHTML = this.errorOriginalHTML + now.toLocaleTimeString();
-                element.hidden = false;
-            }
-        }
+    handleFetchStateError(error) {
+        console.error('Communication Error:', error);
+
+        this.addStateClass('compressor_error');
     }
 }
 
@@ -246,15 +254,8 @@ class ChartMonitor {
 
         this.setChartDurationIndex(0);
 
-        if (document.readyState === 'complete') {
-            this.chart = configureChart(document.getElementById(chartId).getContext('2d'));
-        } else {
-            console.log('Document is not ready, scheduling chart setup when page is loaded.');
-            let t = this;
-            window.onload = function() {
-                t.configureChart(document.getElementById(chartId).getContext('2d'));
-            }
-        }
+        // Create the chart
+        this.configureChart(document.getElementById(chartId).getContext('2d'));
     }
 
     monitor(chartId, interval = null) {

@@ -1,0 +1,59 @@
+/**
+ * State Updates
+ * 
+ * Show/Hide elements based on the current compressor state.
+ */
+
+/* Only visible when an ancestor has the run penging class */
+.run_request .visibleWhenRunPending {
+    display: inline;
+}
+/* Only visible when an ancestor has the running class */
+.compressor_motor_running .visibleWhenRunning {
+    display: inline;
+}
+/* Hidden when an ancestor has the running class */
+.compressor_motor_running .hiddenWhenRunning, .run_request .hiddenWhenRunning {
+    display: none;
+}
+/* Only visible when an ancestor has the compressor on class */
+.compressor_on .visibleWhenOn {
+    display: inline;
+}
+/* Hidden when an ancestor has the compressor on class */
+.compressor_on .hiddenWhenOn {
+    display: none;
+}
+/* Only visible when an ancestor has the purge pending class */
+.purge_pending .visibleWhenPurgePending {
+    display: inline;
+}
+/* Only visible when an ancestor has the purge open class */
+.purge_open .visibleWhenPurging {
+    display: inline;
+}
+/* Hidden when an ancestor has the purge open or purge pending class */
+.purge_open .hiddenWhenPurging, .purge_pending .hiddenWhenPurging {
+    display: none;
+}
+/* Only visible when an ancestor has the error class */
+.compressor_error .visibleWhenCompressorError {
+    display: inline;
+}
+/* If an ancestor is in the undefined_state then all invisible children are visible */
+.undefined_state .visibleWhenRunPending,
+.undefined_state .visibleWhenRunning,
+.undefined_state .visibleWhenOn,
+.undefined_state .visibleWhenPurgePending,
+.undefined_state .visibleWhenPurging {
+    display: inline;
+}
+
+/**
+ * Visual Styles
+ */
+
+.visibleWhenCompressorError {
+    color: red;
+    font-size: large;
+}

@@ -1,17 +1,23 @@
 <!DOCTYPE html>
 <html>
     <head><title>Air Compressor</title></head>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/1.30.1/date_fns.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/2.0.1/chartjs-plugin-annotation.min.js"></script>
     <script src="utils.js"></script>
     <script>
-        let stateMonitor = new StateMonitor('stateUpdateError');
-        let compressorActions = new CompressorActions(stateMonitor);
-        let chartMonitor = new ChartMonitor('compressorTimeline');
-        stateMonitor.monitor();
-        chartMonitor.monitor();        
+        let stateMonitor = null;
+        let compressorActions = null;
+        let chartMonitor = null;
+        window.onload = function() {{
+            stateMonitor = new StateMonitor('lastUpdateTime');
+            compressorActions = new CompressorActions(stateMonitor);
+            chartMonitor = new ChartMonitor('compressorTimeline');
+            stateMonitor.monitor();
+            chartMonitor.monitor();
+        }};
     </script>
     <style>
     #compressorTimelineContainer {{
@@ -38,28 +44,30 @@
                 </label>                
             </div>
         </div>
-        <h2>State</h2>
-        <div id='stateUpdateError' hidden>Warning: server has not responded since </div>
-        <table>
-            <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
-            <tr><td>Tank Pressure</td><td id="tank_pressure">{tank_pressure}</td></tr>
-            <tr><td>Line Pressure</td><td id="line_pressure">{line_pressure}</td></tr>
-            <tr><td>Compressor On</td><td id="compressor_on">{compressor_on}</td></tr>
-            <tr><td>Run Request Pending</td><td id="run_request">{run_request}</td></tr>
-            <tr><td>Compressor Motor Running</td><td id="compressor_motor_running">{compressor_motor_running}</td></tr>
-            <tr><td>Purge Open</td><td id="purge_open">{purge_open}</td></tr>
-            <tr><td>Purge Pending</td><td id="purge_pending">{purge_pending}</td></tr>
-            <tr><td>Shutdown</td><td id="shutdown">{shutdown}</td></tr>
-            <tr><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
-            <tr><td>Duty 10 Minutes</td><td id="duty_10">{duty_10}</td></tr>
-            <tr><td>Duty 60 Minutes</td><td id="duty_60">{duty_60}</td></tr>
-        </table>
-        <div>
-            <button id="on_button" onclick="compressorActions.turnOn()">Turn On</button>
-            <button id="off_button" onclick="compressorActions.turnOff()">Turn Off</button>
-            <button id="pause_button" onclick="compressorActions.pause()">Pause</button>
-            <button id="run_button" onclick="compressorActions.run()">Run</button>
-            <button id="purge_button" onclick="compressorActions.purge()">Purge</button>
+        <div class="undefined_state">
+            <h2>State</h2>
+            <div class='visibleWhenCompressorError' hidden>Warning: server has not responded since <span id='lastUpdateTime'></span></div>
+            <table>
+                <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
+                <tr><td>Tank Pressure</td><td id="tank_pressure">{tank_pressure}</td></tr>
+                <tr><td>Line Pressure</td><td id="line_pressure">{line_pressure}</td></tr>
+                <tr><td>Compressor On</td><td id="compressor_on">{compressor_on}</td></tr>
+                <tr><td>Run Request Pending</td><td id="run_request">{run_request}</td></tr>
+                <tr><td>Compressor Motor Running</td><td id="compressor_motor_running">{compressor_motor_running}</td></tr>
+                <tr><td>Purge Open</td><td id="purge_open">{purge_open}</td></tr>
+                <tr><td>Purge Pending</td><td id="purge_pending">{purge_pending}</td></tr>
+                <tr><td>Shutdown</td><td id="shutdown">{shutdown}</td></tr>
+                <tr><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
+                <tr><td>Duty 10 Minutes</td><td id="duty_10">{duty_10}</td></tr>
+                <tr><td>Duty 60 Minutes</td><td id="duty_60">{duty_60}</td></tr>
+            </table>
+            <div>
+                <button class="hiddenWhenOn" onclick="compressorActions.turnOn()">Turn On</button>
+                <button class="visibleWhenOn" hidden onclick="compressorActions.turnOff()">Turn Off</button>
+                <button class="visibleWhenOn" hidden onclick="compressorActions.pause()">Pause</button>
+                <button class="hiddenWhenRunning" onclick="compressorActions.run()">Run</button>
+                <button class="hiddenWhenPurging" onclick="compressorActions.purge()">Purge</button>
+            </div>
         </div>
         <h2>Settings <a href="editSettings.html">Edit</a></h2>
         <table>
