@@ -2,7 +2,6 @@
 <html>
     <head><title>Air Compressor</title></head>
     <link rel="stylesheet" type="text/css" href="style.css"/>
-    <link rel="stylesheet" type="text/css" href="pichart.css"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/1.30.1/date_fns.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -46,21 +45,12 @@
             </div>
         </div>
         <div class="undefined_state">
+            <h2>State</h2>
             <div class='visibleWhenCompressorError' hidden>Warning: server has not responded since <span id='lastUpdateTime'></span></div>
             <table>
                 <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
-                
-                <tr>
-                    <td><div id="tank_pressure" class="pie pressurePie" style="--pressure:{tank_pressure}">{tank_pressure}</div></td>
-                    <td><div id="line_pressure" class="pie pressurePie" style="--pressure:{line_pressure}">{line_pressure}</div></td>
-                </tr>
-                <tr><td>Tank Pressure</td><td>Line Pressure</td></tr>
-                <tr>
-                    <td><div id="duty_10" class="pie onePie" style="--percentageOne:{duty_10}">{duty_10}</div></td>
-                    <td><div id="duty_60" class="pie onePie" style="--percentageOne:{duty_60}">{duty_60}</div></td>
-                </tr>
-                <tr><td>Duty 10 Minutes</td><td>Duty 60 Minutes</td></tr>
-                
+                <tr><td>Tank Pressure</td><td id="tank_pressure">{tank_pressure}</td></tr>
+                <tr><td>Line Pressure</td><td id="line_pressure">{line_pressure}</td></tr>
                 <tr><td>Compressor On</td><td id="compressor_on">{compressor_on}</td></tr>
                 <tr><td>Run Request Pending</td><td id="run_request">{run_request}</td></tr>
                 <tr><td>Compressor Motor Running</td><td id="compressor_motor_running">{compressor_motor_running}</td></tr>
@@ -68,6 +58,8 @@
                 <tr><td>Purge Pending</td><td id="purge_pending">{purge_pending}</td></tr>
                 <tr><td>Shutdown</td><td id="shutdown">{shutdown}</td></tr>
                 <tr><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
+                <tr><td>Duty 10 Minutes</td><td id="duty_10">{duty_10}</td></tr>
+                <tr><td>Duty 60 Minutes</td><td id="duty_60">{duty_60}</td></tr>
             </table>
             <div>
                 <button class="hiddenWhenOn" onclick="compressorActions.turnOn()">Turn On</button>
@@ -82,7 +74,13 @@
             <tr><td>Start Pressure</td><td>{start_pressure}</td></tr>
             <tr><td>Stop Pressure</td><td>{stop_pressure}</td></tr>
             <tr><td>Max Duty</td><td>{max_duty}</td></tr>
+            <tr><td>Duty Duration</td><td>{duty_duration}</td></tr>
             <tr><td>Recovery Time</td><td>{recovery_time}</td></tr>
+            <tr><td>Drain Duration</td><td>{drain_duration}</td></tr>
+            <tr><td>Drain Delay</td><td>{drain_delay}</td></tr>
+            <tr><td>Compressor On Power Up</td><td>{compressor_on_power_up}</td></tr>
+            <tr><td>Auto Stop Time</td><td>{auto_stop_time}</td></tr>
+            <tr><td>Log Interval</td><td>{log_interval}</td></tr>
         </table>
     </body>
 </html>

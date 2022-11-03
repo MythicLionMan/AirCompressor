@@ -146,8 +146,38 @@ class StateMonitor {
         // the keys fetched in the state dictionary
         for (const [key, value] of Object.entries(state)) {        
             let element = document.getElementById(key);
-            if (element) element.innerHTML = this.map(key, value);
+            if (element) {
+                element.innerHTML = this.map(key, value);
+
+                if (element.style.getPropertyValue("--pressure")) {
+                    element.style.setProperty("--pressure", value);            
+                } else if (element.style.getPropertyValue("--percentageOne")) {
+                    element.style.setProperty("--percentageOne", value);            
+                }
+            }
         };
+    }
+
+    // Maps a state value from the json state definition to an HTML value.
+    // Derived classes can overload this to provide a different mapping.
+    map(key, value) {
+        if (key == 'system_time') {
+            value = new Date(value * 1000);
+            return value.toLocaleTimeString();        
+        } else if (key == 'shutdown' || key == 'duty_recovery_time') {
+            // A value of 0 means that the time is not set
+            if (value == 0) {
+                return 'never';
+            }
+
+            value = new Date(value * 1000 - this.server_time_offset);
+            return value.toLocaleTimeString();
+        } else if (key == 'duty_10' || key == 'duty_60') {
+            return Math.round(value * 100).toString() + '%';
+        } else if (key == 'tank_pressure' || key == 'line_pressure') {
+            return value.toFixed(2);
+        }
+        return value;
     }
 
     removeStateClass(stateName) {
@@ -179,28 +209,6 @@ class StateMonitor {
         }    
     }
         
-    // Maps a state value from the json state definition to an HTML value.
-    // Derived classes can overload this to provide a different mapping.
-    map(key, value) {
-        if (key == 'system_time') {
-            value = new Date(value * 1000);
-            return value.toLocaleTimeString();        
-        } else if (key == 'shutdown' || key == 'duty_recovery_time') {
-            // A value of 0 means that the time is not set
-            if (value == 0) {
-                return 'never';
-            }
-
-            value = new Date(value * 1000 - this.server_time_offset);
-            return value.toLocaleTimeString();
-        } else if (key == 'duty_10' || key == 'duty_60') {
-            return Math.round(value * 100).toString() + '%';
-        } else if (key == 'tank_pressure' || key == 'line_pressure') {
-            return value.toFixed(2);
-        }
-        return value;
-    }
-    
     synchronizeTime(data) {
         if (this.server_time_offset === null) {
             this.server_time_offset = data['system_time'] * 1000 - Date.now();

@@ -1,0 +1,65 @@
+// From: https://www.freecodecamp.org/news/css-only-pie-chart/
+@property --percentage{
+   syntax: '<number>';
+   inherits: true;
+   initial-value: 1;
+}
+
+.pie {
+   --percentage:20;
+   --border-thickness:22px;
+   --main-color:darkred;
+   --width:150px;
+
+   width: var(--width);
+   aspect-ratio: 1;
+   position: relative;
+   display: inline-grid;
+   margin: 5px;
+   place-content: center;
+   font-size: 25px;
+   font-weight: bold;
+   font-family: sans-serif;
+}
+.pie:before,
+.pie:after {
+   content: "";
+   position: absolute;
+   border-radius: 50%;
+}
+.pie:before {
+   inset: 0;
+   background:
+      radial-gradient(farthest-side,var(--main-color) 98%,#0000) top/var(--border-thickness) var(--border-thickness) no-repeat,
+      conic-gradient(var(--main-color) calc(var(--percentage)*1%),#0000 0);
+   -webkit-mask: radial-gradient(farthest-side,#0000 calc(99% - var(--border-thickness)),#000 calc(100% - var(--border-thickness)));
+               mask: radial-gradient(farthest-side,#0000 calc(99% - var(--border-thickness)),#000 calc(100% - var(--border-thickness)));
+}
+.pie:after {
+   inset: calc(50% - var(--border-thickness)/2);
+   background: var(--main-color);
+   transform: rotate(calc(var(--percentage)*3.6deg)) translateY(calc(50% - var(--width)/2));
+}
+.animate {
+   animation: p 1s .5s both;
+}
+.no-round:before {
+   background-size: 0 0, auto;
+}
+.no-round:after {
+   content: none;
+}
+@keyframes p{
+   from{--percentage:0}
+}
+
+/* Pie chart with range 0 - 1 */
+.onePie {
+    --percentageOne:20;
+    --percentage:calc(var(--percentageOne)*100)
+}
+/* Pie chart with range 0 - 150 */
+.pressurePie {
+    --pressure:20;
+    --percentage:calc(var(--pressure)/150*100)
+}
