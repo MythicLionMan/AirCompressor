@@ -363,7 +363,7 @@ class Compressor:
         if max_duty < 1 and current_duty > max_duty:
             # If the motor is currently running trigger a request to run again once
             # the duty cycle condition is cleared
-            self.request_run_flag |= self.compressor_running
+            self.request_run_flag = self.request_run_flag or self.compressor_running
 
             self._pause()
             # TODO recovery_time could be calculated by averaging (or taking the  max) of the last few
@@ -376,7 +376,7 @@ class Compressor:
 
         if current_pressure > self.settings.stop_pressure:
             self._pause()
-        elif current_pressure < self.settings.start_pressure or self.request_run:
+        elif current_pressure < self.settings.start_pressure or self.request_run_flag:
             self.request_run_flag = False
             self._run_motor()
 
@@ -533,7 +533,7 @@ class CompressorServer(Server):
                 self.return_json(writer, {'result':'unknown method'}, 404)
         except Exception as e:
             print("Error handling request.")
-            sys.print_exeception(e)
+            sys.print_exception(e)
         finally:
             await writer.drain()
             await writer.wait_closed()
@@ -570,7 +570,7 @@ async def main():
         server.run()
     except Exception as e:
         print("Network error. Running without API.")
-        sys.print_exeception(e)
+        sys.print_exception(e)
     
     # Loop forever while the coroutines process
     #asyncio.get_event_loop().run_forever()
