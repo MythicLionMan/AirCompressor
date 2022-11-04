@@ -40,6 +40,11 @@
 .compressor_error .visibleWhenCompressorError {
     display: inline;
 }
+/* Only visible when an ancestor has the motor_state_duty class */
+.motor_state_duty .visibleWhenDutyBlocked {
+    display: table-row;
+}
+
 /* If an ancestor is in the undefined_state then all invisible children are visible */
 .undefined_state .visibleWhenRunPending,
 .undefined_state .visibleWhenRunning,
