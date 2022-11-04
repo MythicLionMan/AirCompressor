@@ -1,4 +1,5 @@
 settings = {
+    debug: false,
     stateQueryInterval: 5000,
     chartQueryInterval: 5000,
     chartDuration: [ 5*60*1000, 10*60*1000, 20*60*1000 ]
@@ -119,16 +120,40 @@ class StateMonitor {
     monitor(interval = null) {
         if (interval === null) { interval = settings.stateQueryInterval; }
         
+        let t = this;
         if (interval == 0) {
             if (this.monitorId) {
                 clearInterval(this.monitorId);
                 this.monitorId = null;
             }
+        } else if (settings.debug) {
+            this.monitorId = setInterval(function(){t.applyDebugState();}, interval);
+            this.applyDebugState();
         } else {
-            let t = this;
             this.monitorId = setInterval(function(){t.fetchState();}, interval);
             this.fetchState();
         }
+    }
+        
+    applyDebugState() {        
+        this.updateState({
+            'system_time': Date.now() / 1000,
+            'tank_pressure': 110 + Math.random() * 20,
+            'line_pressure': 80 + Math.random() * 20,
+            'duty_10': Math.random(),
+            'duty_60': Math.random(),
+            'compressor_on': true,
+            'run_request': false,
+            'compressor_motor_running': true,
+            'purge_open': true,
+            'purge_pending': false,
+            'shutdown': Date.now() / 1000 + 60*60*5,
+            'duty_recovery_time': Date.now() / 1000 + 60*2,
+            'start_pressure': 90,
+            'stop_pressure': 125,
+            'max_duty': 0.6,
+            'recovery_time': 60*2
+        });        
     }
     
     // Updates the state of the document based on a json state description
@@ -284,7 +309,7 @@ class ChartMonitor {
                 clearInterval(this.monitorId);
                 this.monitorId = null;
             }
-        } else {
+        } else if (!settings.debug) {
             let t = this;
             this.monitorId = setInterval(function(){ t.updateChart() }, interval);
             this.updateChart();
