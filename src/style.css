@@ -9,11 +9,11 @@
     display: inline;
 }
 /* Only visible when an ancestor has the running class */
-.compressor_motor_running .visibleWhenRunning {
+.motor_state_run .visibleWhenRunning {
     display: inline;
 }
 /* Hidden when an ancestor has the running class */
-.compressor_motor_running .hiddenWhenRunning, .run_request .hiddenWhenRunning {
+.motor_state_run .hiddenWhenRunning, .run_request .hiddenWhenRunning {
     display: none;
 }
 /* Only visible when an ancestor has the compressor on class */
@@ -93,9 +93,13 @@ td > #tank_pressure, td > #line_pressure, td > #duty_10, td > #duty_60 {
 
 /**
  * Status lights
+ *
+ * - power_light is green when on, red when off
+ * - run_light is blue when on, amber when purging, grey when off. Flashes for pending actions
+ * - pressure_warning is on when the motor is not running because the duty cycle has been exceeded
  */
 
-div#power_light, div#run_light {
+div#power_light, div#run_light, div#pressure_warning {
     display: inline-block;
     margin-right: 6px;
     margin-left: 6px;
@@ -105,12 +109,9 @@ div#power_light, div#run_light {
     background-color: #ddd;
 }
 
-/* Power light is green when on, red when off */
+
 /* From https://codersblock.com/blog/creating-glow-effects-with-css/ */
-div#power_light {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
+div#power_light, .motor_state_duty div#pressure_warning {
     background-color: #fdd;    
     box-shadow:
         0 0 7px 3px #fff,  /* inner white */
@@ -123,10 +124,8 @@ div#power_light {
         0 0 10px 5px #0f0  /* green */
 }
 
-/* Run light is blue when on, amber when purging, grey when off */
-
 /* For motor running or run request pending set the light to blue */
-.compressor_motor_running div#run_light, .run_request div#run_light {
+.motor_state_run div#run_light, .run_request div#run_light {
     background-color: #ddf;    
     box-shadow:
         0 0 7px 3px #fff,  /* inner white */

@@ -177,6 +177,14 @@ class StateLog(RingLog):
 # Compressor Functions
 #
 
+MOTOR_STATE_RUN=const('run')                    # lower pressure limit reached, motor on
+MOTOR_STATE_OFF=const('off')                    # compressor is in off mode
+MOTOR_STATE_SENSOR_ERROR=const('sensor_error')  # error reading pressure sensor
+MOTOR_STATE_PAUSE=const('pause')                # user pause requested
+MOTOR_STATE_PRESSURE=const('overpressure')      # upper pressure limit reached
+MOTOR_STATE_DUTY=const('duty')                  # duty limit reached
+MOTOR_STATE_PURGE=const('purge')                # purging in progress, motor disabled
+
 class Compressor:
     def __init__(self, settings):
         self.activity_log = EventLog()
@@ -191,7 +199,7 @@ class Compressor:
         # Setup state
         self.compressor_is_on = False    # The compressor will only run when this is True
         self.request_run_flag = False    # If this is True the compressor will run the next time that it can
-        self.compressor_running = False  # True while the compressor is running, false when it is not
+        self.motor_state = MOTOR_STATE_OFF  # MOTOR_STATE_RUN if the motor is running, otherwise the reason it is not
         self.purge_valve_open = False    # True when the purge valve is open, false when it is not
         self.purge_pending = False       # True when a purge is pending, false when it is not
         self.shutdown_time = 0           # The time when the compressor is scheduled to shutdown
@@ -224,7 +232,24 @@ class Compressor:
     
     @property
     def state(self):
-        return ('O' if self.compressor_is_on else '_') + ('R' if self.compressor_running else '_') + ('P' if self.purge_valve_open else '_')
+        if self.motor_state == MOTOR_STATE_RUN:
+            short_state = 'R'
+        elif self.motor_state == MOTOR_STATE_OFF:
+            short_state = 'f'
+        elif self.motor_state == MOTOR_STATE_SENSOR_ERROR:
+            short_state = 's'
+        elif self.motor_state == MOTOR_STATE_PAUSE:
+            short_state = '|'
+        elif self.motor_state == MOTOR_STATE_PRESSURE:
+            short_state = 'p'
+        elif self.motor_state == MOTOR_STATE_DUTY:
+            short_state = 'd'
+        elif self.motor_state == MOTOR_STATE_PURGE:
+            short_state = '*'
+        else:
+            '_'
+
+        return ('O' if self.compressor_is_on else '_') + short_state + ('P' if self.purge_valve_open else '_')
     
     @property
     def state_dictionary(self):
@@ -235,8 +260,8 @@ class Compressor:
             "tank_pressure": self.tank_pressure,
             "line_pressure": self.line_pressure,
             "compressor_on": self.compressor_is_on,
+            "motor_state": self.motor_state,
             "run_request": self.request_run_flag,
-            "compressor_motor_running": self.compressor_running,
             "purge_open": self.purge_valve_open,
             "purge_pending": self.purge_pending,
             "shutdown": self.shutdown_time,
@@ -266,7 +291,7 @@ class Compressor:
     
     def compressor_off(self):
         # Make sure that the compressor is off
-        self._pause()
+        self._pause(MOTOR_STATE_OFF)
 
         # If it was active before the call then
         # trigger any stop actions
@@ -292,7 +317,7 @@ class Compressor:
             self.purge_pending = True
             await asyncio.sleep(delay)
             # If the motor is running, stop it
-            self._pause()
+            self._pause(MOTOR_STATE_PURGE)
             
             # Open the drain solenoid
             self.drain_solenoid.value(1)            
@@ -309,18 +334,18 @@ class Compressor:
         self.compressor_motor.value(1)
         self.drain_solenoid.value(0)
         
-        if not self.compressor_running:
-            self.compressor_running = True
+        if self.motor_state != MOTOR_STATE_RUN:
+            self.motor_state = MOTOR_STATE_RUN
             self.activity_log.log_start(EVENT_RUN)
 
     def pause(self):
         self.command_log.log_command(COMMAND_PAUSE)
-        self._pause()
+        self._pause(MOTOR_STATE_PAUSE)
         
-    def _pause(self):
+    def _pause(self, reason):
         self.compressor_motor.value(0)
         self.activity_log.log_stop()
-        self.compressor_running = False
+        self.motor_state = reason
 
 
     def _update(self):
@@ -342,8 +367,11 @@ class Compressor:
         if self.shutdown_time > 0 and current_time > self.shutdown_time and self.compressor_is_on:
             self.compressor_off()
 
-        if not self.compressor_is_on or self.purge_valve_open or self.purge_pending:
-            self._pause()
+        if not self.compressor_is_on:
+            self._pause(MOTOR_STATE_OFF)
+            return
+        if self.purge_valve_open or self.purge_pending:
+            self._pause(MOTOR_STATE_PURGE)
             return
 
         # If the sensor value is out of range then shut off the motor
@@ -353,19 +381,19 @@ class Compressor:
             self.sensor_error = False
             
         if self.sensor_error:
-            self._pause()
+            self._pause(MOTOR_STATE_ERROR)
             return
             
         if current_time < self.duty_recovery_time:
-            self._pause()
+            self._pause(MOTOR_STATE_DUTY)
             return
         
         if max_duty < 1 and current_duty > max_duty:
             # If the motor is currently running trigger a request to run again once
             # the duty cycle condition is cleared
-            self.request_run_flag = self.request_run_flag or self.compressor_running
+            self.request_run_flag = self.request_run_flag or self.motor_state == MOTOR_STATE_RUN
 
-            self._pause()
+            self._pause(MOTOR_STATE_DUTY)
             # TODO recovery_time could be calculated by averaging (or taking the  max) of the last few
             #      run cycles. For now it's just a setting
             self.duty_recovery_time = current_time + self.settings.recovery_time
@@ -375,7 +403,7 @@ class Compressor:
             return
 
         if current_pressure > self.settings.stop_pressure:
-            self._pause()
+            self._pause(MOTOR_STATE_PRESSURE)
         elif current_pressure < self.settings.start_pressure or self.request_run_flag:
             self.request_run_flag = False
             self._run_motor()

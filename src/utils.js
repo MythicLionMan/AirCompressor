@@ -144,7 +144,7 @@ class StateMonitor {
             'duty_60': Math.random(),
             'compressor_on': true,
             'run_request': false,
-            'compressor_motor_running': true,
+            'motor_state': 'run',
             'purge_open': true,
             'purge_pending': false,
             'shutdown': Date.now() / 1000 + 60*60*5,
@@ -220,7 +220,7 @@ class StateMonitor {
     // Updates the html classes that are assigned to elements with a state
     // class.
     updateClassesWithCompressorState(state) {
-        let stateClassNames = ['compressor_on', 'run_request', 'compressor_motor_running', 'purge_pending', 'purge_open'];
+        let stateClassNames = ['compressor_on', 'run_request', 'purge_pending', 'purge_open'];
         
         for (let element of this.stateElements) {
             element.classList.remove('undefined_state');
@@ -231,7 +231,22 @@ class StateMonitor {
                     element.classList.remove(className);                
                 }
             }
-        }    
+        }
+        
+        // Add the new motor state and remove any previous motor states
+        const motorState = 'motor_state_' + state['motor_state'];
+        for (let element of this.stateElements) {
+            // Remove any previous motorState classes from the element
+            var motorClasses = Array.from(element.classList).filter(className => className.startsWith('motor_state_'));
+            for (let foundClass of motorClasses) {
+                if (foundClass != motorState) {
+                    element.classList.remove(foundClass);
+                }
+            }
+            
+            // Add the current motorState class
+            element.classList.add(motorState);
+        }
     }
         
     synchronizeTime(data) {
