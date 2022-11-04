@@ -47,25 +47,34 @@
         </div>
         <div class="undefined_state">
             <div class='visibleWhenCompressorError' hidden>Warning: server has not responded since <span id='lastUpdateTime'>forever</span></div>
+            <div>
+                <div id="power_light"></div>
+                <div id="run_light"></div>
+            </div>
             <table>
                 <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
                 
                 <tr>
-                    <td><div id="tank_pressure" class="pie pressurePie" style="--pressure:{tank_pressure}">{tank_pressure}</div></td>
-                    <td><div id="line_pressure" class="pie pressurePie" style="--pressure:{line_pressure}">{line_pressure}</div></td>
+                    <td>
+                        <div id="tank_pressure" class="pie pressurePie" style="--pressure:{tank_pressure}">{tank_pressure}</div>
+                        <label for="tank_pressure">Tank Pressure</label>
+                    </td>
+                    <td>
+                        <div id="line_pressure" class="pie pressurePie" style="--pressure:{line_pressure}">{line_pressure}</div>
+                        <label for="line_pressure">Line Pressure</label>
+                    </td>
                 </tr>
-                <tr><td>Tank Pressure</td><td>Line Pressure</td></tr>
                 <tr>
-                    <td><div id="duty_10" class="pie onePie" style="--percentageOne:{duty_10}">{duty_10}</div></td>
-                    <td><div id="duty_60" class="pie onePie" style="--percentageOne:{duty_60}">{duty_60}</div></td>
+                    <td>
+                        <div id="duty_10" class="pie onePie" style="--percentageOne:{duty_10}">{duty_10}</div>
+                        <label for="duty_10">Runtime Last 10 Minutes</label>
+                    </td>
+                    <td>
+                        <div id="duty_60" class="pie onePie" style="--percentageOne:{duty_60}">{duty_60}</div>
+                        <label for="duty_60">Runtime Last 60 Minutes</label>
+                    </td>
                 </tr>
-                <tr><td>Duty 10 Minutes</td><td>Duty 60 Minutes</td></tr>
                 
-                <tr><td>Compressor On</td><td id="compressor_on">{compressor_on}</td></tr>
-                <tr><td>Run Request Pending</td><td id="run_request">{run_request}</td></tr>
-                <tr><td>Compressor Motor Running</td><td id="compressor_motor_running">{compressor_motor_running}</td></tr>
-                <tr><td>Purge Open</td><td id="purge_open">{purge_open}</td></tr>
-                <tr><td>Purge Pending</td><td id="purge_pending">{purge_pending}</td></tr>
                 <tr><td>Shutdown</td><td id="shutdown">{shutdown}</td></tr>
                 <tr><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
             </table>

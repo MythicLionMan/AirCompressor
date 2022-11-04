@@ -53,7 +53,89 @@
  * Visual Styles
  */
 
+/* Compressor errors are in large red text */
 .visibleWhenCompressorError {
     color: red;
     font-size: large;
+}
+
+#duty_10, #duty_60 {
+    --border-thickness: 7px;
+    --width: 75px;
+    --main-color: AliceBlue;
+}
+#duty_10 + label, #duty_60 + label {
+    display: block;
+    color: #bde0ff;
+    font-size: small;
+    text-align: center;
+}
+#tank_pressure + label, #line_pressure + label {
+    display: block;
+    color: #bde0ff;
+    font-size: medium;
+    text-align: center;
+}
+td > #tank_pressure, td > #line_pressure, td > #duty_10, td > #duty_60 {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/**
+ * Status lights
+ */
+
+div#power_light, div#run_light {
+    display: inline-block;
+    margin-right: 6px;
+    margin-left: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #ddd;
+}
+
+/* Power light is green when on, red when off */
+/* From https://codersblock.com/blog/creating-glow-effects-with-css/ */
+div#power_light {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #fdd;    
+    box-shadow:
+        0 0 7px 3px #fff,  /* inner white */
+        0 0 10px 5px #f00  /* red */
+}
+.compressor_on div#power_light {
+    background-color: #dfd;    
+    box-shadow:
+        0 0 7px 3px #fff,  /* inner white */
+        0 0 10px 5px #0f0  /* green */
+}
+
+/* Run light is blue when on, amber when purging, grey when off */
+
+/* For motor running or run request pending set the light to blue */
+.compressor_motor_running div#run_light, .run_request div#run_light {
+    background-color: #ddf;    
+    box-shadow:
+        0 0 7px 3px #fff,  /* inner white */
+        0 0 10px 5px #00f  /* blue */
+}
+/* For purging or purge pending set the light to amber */
+.purge_open div#run_light, .purge_pending div#run_light {
+    background-color: #fff;    
+    box-shadow:
+        0 0 7px 3px #fff,     /* inner white */
+        0 0 10px 5px #ffbf00  /* amber */
+}
+/* If either of the pending modes are active, blink the run light */
+.purge_pending div#run_light, .run_request div#run_light {
+    animation: blinker 1s linear infinite;
+}
+
+@keyframes blinker {
+    50% {
+        opacity: 0;
+    }
 }
