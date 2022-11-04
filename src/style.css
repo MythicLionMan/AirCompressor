@@ -45,8 +45,18 @@
 .undefined_state .visibleWhenRunning,
 .undefined_state .visibleWhenOn,
 .undefined_state .visibleWhenPurgePending,
-.undefined_state .visibleWhenPurging {
+.undefined_state .visibleWhenPurging,
+.undefined_state .visibleWhenUndefined {
     display: inline;
+}
+
+/**
+ * Layout
+ */
+#compressorTimelineContainer {
+    float: right;
+    width: 65%;
+    aspect-ratio: 3/2;
 }
 
 /**

@@ -20,13 +20,6 @@
             chartMonitor.monitor();
         }};
     </script>
-    <style>
-    #compressorTimelineContainer {{
-        float: right;
-        width: 65%;
-        aspect-ratio: 3/2;
-    }}
-    </style>
     <body>
         <h1>Air Compressor</h1>
 
@@ -51,9 +44,7 @@
                 <div id="power_light"></div>
                 <div id="run_light"></div>
             </div>
-            <table>
-                <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
-                
+            <table>                
                 <tr>
                     <td>
                         <div id="tank_pressure" class="pie pressurePie" style="--pressure:{tank_pressure}">{tank_pressure}</div>
@@ -75,7 +66,8 @@
                     </td>
                 </tr>
                 
-                <tr><td>Shutdown</td><td id="shutdown">{shutdown}</td></tr>
+                <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
+                <tr><td>Shutdown Scheduled</td><td id="shutdown">{shutdown}</td></tr>
                 <tr><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
             </table>
             <div>
