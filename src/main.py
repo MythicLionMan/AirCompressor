@@ -270,8 +270,8 @@ class Compressor:
             "purge_pending": self.purge_pending,
             "shutdown": self.shutdown_time,
             "duty_recovery_time": self.duty_recovery_time,
-            "duty_10": self.activity_log.calculate_duty(10),
-            "duty_60": self.activity_log.calculate_duty(60)
+            "duty_10": self.activity_log.calculate_duty(10*60),
+            "duty_60": self.activity_log.calculate_duty(60*60)
         }        
     
     # The next time the compressor is updated it will start to run if it can
