@@ -74,12 +74,12 @@
     font-size: large;
 }
 
-#duty_10, #duty_60 {
+#duty, #duty_60 {
     --border-thickness: 7px;
     --width: 75px;
     --main-color: AliceBlue;
 }
-#duty_10 + label, #duty_60 + label {
+#duty + label, #duty_60 + label {
     display: block;
     color: #bde0ff;
     font-size: small;
@@ -91,7 +91,7 @@
     font-size: medium;
     text-align: center;
 }
-td > #tank_pressure, td > #line_pressure, td > #duty_10, td > #duty_60 {
+td > #tank_pressure, td > #line_pressure, td > #duty, td > #duty_60 {
     margin-left: auto;
     margin-right: auto;
 }

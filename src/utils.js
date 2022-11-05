@@ -140,7 +140,7 @@ class StateMonitor {
             'system_time': Date.now() / 1000,
             'tank_pressure': 110 + Math.random() * 20,
             'line_pressure': 80 + Math.random() * 20,
-            'duty_10': Math.random(),
+            'duty': Math.random(),
             'duty_60': Math.random(),
             'compressor_on': true,
             'run_request': false,
@@ -199,7 +199,7 @@ class StateMonitor {
 
             value = new Date(value * 1000 - this.server_time_offset);
             return value.toLocaleTimeString();
-        } else if (key == 'duty_10' || key == 'duty_60') {
+        } else if (key == 'duty' || key == 'duty_60') {
             return Math.round(value * 100).toString() + '%';
         } else if (key == 'tank_pressure' || key == 'line_pressure') {
             return value.toFixed(2);
