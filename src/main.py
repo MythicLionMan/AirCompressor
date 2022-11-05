@@ -18,6 +18,7 @@ default_settings = {
     # Compressor configuration
     "start_pressure": 90,
     "stop_pressure": 125,
+    "min_line_pressure": 89,
     "max_duty": 0.6,
     "duty_duration": 10*60,
     "drain_duration": 10,
@@ -259,6 +260,9 @@ class Compressor:
             "system_time": time.time(),
             "tank_pressure": self.tank_pressure,
             "line_pressure": self.line_pressure,
+            "tank_underpressure": self.tank_pressure < self.settings.start_pressure,
+            "line_underpressure": self.line_pressure < self.settings.min_line_pressure or
+                                  self.tank_pressure < self.settings.min_line_pressure,
             "compressor_on": self.compressor_is_on,
             "motor_state": self.motor_state,
             "run_request": self.request_run_flag,

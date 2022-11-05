@@ -101,7 +101,8 @@ td > #tank_pressure, td > #line_pressure, td > #duty_10, td > #duty_60 {
  *
  * - power_light is green when on, red when off
  * - run_light is blue when on, amber when purging, grey when off. Flashes for pending actions
- * - pressure_warning is on when the motor is not running because the duty cycle has been exceeded
+ * - pressure_warning is on when the motor is not running because the duty cycle has been exceeded,
+ *                    or when tank_underpressure or line_underpressure is true.
  */
 
 div#power_light, div#run_light, div#pressure_warning {
@@ -116,7 +117,10 @@ div#power_light, div#run_light, div#pressure_warning {
 
 
 /* From https://codersblock.com/blog/creating-glow-effects-with-css/ */
-div#power_light, .motor_state_duty div#pressure_warning {
+div#power_light,
+.motor_state_duty div#pressure_warning,
+.tank_underpressure div#pressure_warning,
+.line_underpressure div#pressure_warning {
     background-color: #fdd;    
     box-shadow:
         0 0 7px 3px #fff,  /* inner white */
@@ -144,7 +148,9 @@ div#power_light, .motor_state_duty div#pressure_warning {
         0 0 10px 5px #ffbf00  /* amber */
 }
 /* If either of the pending modes are active, blink the run light */
-.purge_pending div#run_light, .run_request div#run_light {
+.purge_pending div#run_light,
+.run_request div#run_light,
+.motor_state_duty div#pressure_warning {
     animation: blinker 1s linear infinite;
 }
 

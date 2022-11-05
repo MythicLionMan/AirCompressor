@@ -144,6 +144,8 @@ class StateMonitor {
             'duty_60': Math.random(),
             'compressor_on': true,
             'run_request': false,
+            'tank_underpressure': false,
+            'line_underpressure': false,
             'motor_state': 'run',
             'purge_open': true,
             'purge_pending': false,
@@ -220,7 +222,10 @@ class StateMonitor {
     // Updates the html classes that are assigned to elements with a state
     // class.
     updateClassesWithCompressorState(state) {
-        let stateClassNames = ['compressor_on', 'run_request', 'purge_pending', 'purge_open'];
+        let stateClassNames = [
+            'compressor_on', 'run_request', 'purge_pending', 'purge_open', 
+            'tank_underpressure', 'line_underpressure'
+        ];
         
         for (let element of this.stateElements) {
             element.classList.remove('undefined_state');
