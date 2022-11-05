@@ -5,16 +5,28 @@ settings = {
     chartDuration: [ 5*60*1000, 10*60*1000, 20*60*1000 ]
 };
 
+function assignKeyPath(destination, path, value) {
+    if (!Array.isArray(path)) path = path.split('.');
+    
+    key = path.shift();
+    if (path.length == 0) {
+        destination[key] = value;
+    } else {
+        if (!(key in destination)) destination[key] = {};
+        assignKeyPath(destination[key], path, value);
+    }
+}
+
 class CompressorActions {
-    constructor(stateMonitor) {
+    constructor(stateMonitor = null) {
         this.stateMonitor = stateMonitor;
     }
-    
+        
     submitSettings(formID) {
         // Convert the form to json
         const formData = new FormData(document.getElementById(formID))
         let data = {};
-        formData.forEach((value, key) => data[key] = value);
+        formData.forEach((value, key) => assignKeyPath(data, key, value));
                 
         this.submitToEndpoint('POST', '/settings', data)
     }
@@ -76,7 +88,9 @@ class CompressorActions {
             
         this.success(endpoint, messages[endpoint]);
         // Refetch the state to update the UI
-        this.stateMonitor.fetchState();
+        if (this.stateMonitor) {
+            this.stateMonitor.fetchState();
+        }
     }
     
     callFailure(endpoint) {

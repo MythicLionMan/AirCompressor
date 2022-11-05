@@ -28,7 +28,11 @@ class Settings:
         
     def __getattr__(self, name):
         return self.values[name]
-
+    
+    @property
+    def values_dictionary(self):
+        return {k: (v.values_dictionary if isinstance(v, Settings) else v) for (k, v) in self.values.items()}
+    
     def setup_properties(self, defaults):
         pass
     
@@ -41,10 +45,9 @@ class Settings:
         for key, default_value in self.defaults.items():
             # Find the current value of the object
             current_value = self.values[key]
-            # If the existing value supports the update method, recurse into it
-            delta_method = getattr(current_value, "delta", None)
-            if callable(delta_method):
-                delta_values = delta_method(current_value, default_value)
+            # If the existing value is another Settings object, recurse into it
+            if isinstance(current_value, Settings):
+                delta_values = current_value.delta
                 
                 # If the sub object had deltas assign them to the result
                 if len(delta_values) > 0:
@@ -78,10 +81,9 @@ class Settings:
                     current_value = current_values[key]
                     default_value = defaults[key]
                     
-                    # If the existing value supports the update method, recurse into it
-                    update_method = getattr(current_value, "update", None)
-                    if callable(update_method):
-                        update_method(new_value)
+                    # If the existing value is another settings object, recurse into it
+                    if isinstance(current_value, Settings):
+                        current_value.update(new_value)
                     # Otherwise assign the new value, matching the type of the default value
                     elif isinstance(current_value, float):
                         self.values[key] = float(new_value)
@@ -105,7 +107,6 @@ class Settings:
                 f = open(self.persist_path)
                 delta = f.read()
                 f.close()
-            
                 # Read any values that have been persisted and apply them on top of the defaults
                 values = ujson.loads(delta)
                 self.update(values)

@@ -37,7 +37,6 @@ default_settings = {
     "gateway": '',
     "nameserver": '',
 
-    
     # Sensor configuration
     "tank_pressure_sensor": {
         "value_min": 0,
@@ -54,8 +53,8 @@ default_settings = {
 }
 class CompressorSettings(Settings):
     def setup_properties(self, defaults):
-        self.tank_pressure_sensor = ValueScale(defaults['tank_pressure_sensor'])
-        self.line_pressure_sensor = ValueScale(defaults['line_pressure_sensor'])
+        self.values['tank_pressure_sensor'] = ValueScale(defaults['tank_pressure_sensor'])
+        self.values['line_pressure_sensor'] = ValueScale(defaults['line_pressure_sensor'])
 
 # Static settings
 tank_pressure_pin = const(0)
@@ -168,7 +167,8 @@ class StateLog(RingLog):
         #print("now = " + str(now) + " since last " + str(since_last) + " Interval " + str(self.settings.log_interval))
         if since_last > self.settings.log_interval:
             self.last_log_time = now
-            self.log((now, tank_pressure, line_pressure, duty, state))
+            self.log((now, -1 if tank_pressure is None else tank_pressure,
+                           -1 if line_pressure is None else line_pressure, duty, state))
             
     @property
     def max_duration(self):
@@ -256,13 +256,15 @@ class Compressor:
     def state_dictionary(self):
         self._read_ADC()
         
+        tank_pressure = -1 if self.tank_pressure is None else self.tank_pressure
+        line_pressure = -1 if self.line_pressure is None else self.line_pressure
         return {
             "system_time": time.time(),
-            "tank_pressure": self.tank_pressure,
-            "line_pressure": self.line_pressure,
-            "tank_underpressure": self.tank_pressure < self.settings.start_pressure,
-            "line_underpressure": self.line_pressure < self.settings.min_line_pressure or
-                                  self.tank_pressure < self.settings.min_line_pressure,
+            "tank_pressure": tank_pressure,
+            "line_pressure": line_pressure,
+            "tank_underpressure": tank_pressure < self.settings.start_pressure,
+            "line_underpressure": line_pressure < self.settings.min_line_pressure or
+                                  tank_pressure < self.settings.min_line_pressure,
             "compressor_on": self.compressor_is_on,
             "motor_state": self.motor_state,
             "run_request": self.request_run_flag,
@@ -380,14 +382,9 @@ class Compressor:
 
         # If the sensor value is out of range then shut off the motor
         if current_pressure == None:
-            self.sensor_error = True
-        else:
-            self.sensor_error = False
-            
-        if self.sensor_error:
-            self._pause(MOTOR_STATE_ERROR)
+            self._pause(MOTOR_STATE_SENSOR_ERROR)
             return
-            
+                        
         if current_time < self.duty_recovery_time:
             self._pause(MOTOR_STATE_DUTY)
             return
@@ -446,7 +443,9 @@ class CompressorServer(Server):
         if path.endswith('.html'):
             values = {}
             values.update(self.compressor.state_dictionary)
-            values.update(self.settings.values)
+            values.update(self.settings.values_dictionary)
+
+            values = flatten_dict(values);
         else:
             values = None
         
@@ -577,6 +576,21 @@ class CompressorServer(Server):
         
         cl.send('HTTP/1.0 200 OK\r\nContent-type: text/html\r\n\r\n')
         cl.send('<html><head></head><body><h1>Response</h1></body></html>')
+
+def flatten_dict(input_dict, output_dict = None, prefix = None):
+    if output_dict is None:
+        output_dict = {}
+        
+    for key, value in input_dict.items():
+        if prefix is not None:
+            key = prefix + '>' + key
+
+        if type(value) is dict:
+            flatten_dict(value, output_dict, key);
+        else:
+            output_dict[key] = value
+            
+    return output_dict
 
 #######################
 # Main
