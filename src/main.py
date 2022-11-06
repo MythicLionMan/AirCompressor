@@ -3,6 +3,7 @@ import socket
 from settings import Settings
 from settings import ValueScale
 from server import Server
+from server import flatten_dict
 from ringlog import RingLog
 
 import ujson
@@ -53,6 +54,7 @@ default_settings = {
 }
 class CompressorSettings(Settings):
     def setup_properties(self, defaults):
+        self.private_keys = ('wlan_password')
         self.values['tank_pressure_sensor'] = ValueScale(defaults['tank_pressure_sensor'])
         self.values['line_pressure_sensor'] = ValueScale(defaults['line_pressure_sensor'])
 
@@ -443,7 +445,7 @@ class CompressorServer(Server):
         if path.endswith('.html'):
             values = {}
             values.update(self.compressor.state_dictionary)
-            values.update(self.settings.values_dictionary)
+            values.update(self.settings.public_values_dictionary)
 
             values = flatten_dict(values);
         else:
@@ -471,11 +473,11 @@ class CompressorServer(Server):
                             self.settings.update(parameters)
                             self.settings.write_delta()
                             
-                            self.return_json(writer, self.settings.values)
+                            self.return_json(writer, self.settings.public_values_dictioniary)
                         except KeyError as e:
                             self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
                     else:
-                        self.return_json(writer, self.settings.values)
+                        self.return_json(writer, self.settings.public_values_dictioniary)
                 
                 # The rest of the commands only accept 0 - 2 parameters
                 elif len(parameters) > 2:                
@@ -576,21 +578,6 @@ class CompressorServer(Server):
         
         cl.send('HTTP/1.0 200 OK\r\nContent-type: text/html\r\n\r\n')
         cl.send('<html><head></head><body><h1>Response</h1></body></html>')
-
-def flatten_dict(input_dict, output_dict = None, prefix = None):
-    if output_dict is None:
-        output_dict = {}
-        
-    for key, value in input_dict.items():
-        if prefix is not None:
-            key = prefix + '>' + key
-
-        if type(value) is dict:
-            flatten_dict(value, output_dict, key);
-        else:
-            output_dict[key] = value
-            
-    return output_dict
 
 #######################
 # Main

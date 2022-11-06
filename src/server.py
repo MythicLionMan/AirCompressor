@@ -170,6 +170,8 @@ class Server:
                 else:
                     self._run_blocking()
                     print('Webserver is done. Bye bye.')
+            # TODO I sometimes get ENOMEM here. It looks like I'm not releasing sockets properly
+            #      https://forum.micropython.org/viewtopic.php?t=4025
             except Exception as e:
                 print('Error in main runloop')
                 sys.print_exception(e)
@@ -181,3 +183,20 @@ class Server:
 
     def run(self):
         self.run_task = asyncio.create_task(self._run())
+
+# A utility that takes a nested dictinary and returns a copy with
+# all nested keys stored as key paths on the root
+def flatten_dict(input_dict, output_dict = None, prefix = None):
+    if output_dict is None:
+        output_dict = {}
+        
+    for key, value in input_dict.items():
+        if prefix is not None:
+            key = prefix + '>' + key
+
+        if type(value) is dict:
+            flatten_dict(value, output_dict, key);
+        else:
+            output_dict[key] = value
+            
+    return output_dict

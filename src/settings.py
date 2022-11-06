@@ -17,6 +17,7 @@ class Settings:
     def __init__(self, defaults, persist_path = 'settings.json'):
         self.defaults = defaults
         self.values = {}
+        self.private_keys = ()
         self.persist_path = persist_path
         
         # Create the ValueScale settings
@@ -32,6 +33,13 @@ class Settings:
     @property
     def values_dictionary(self):
         return {k: (v.values_dictionary if isinstance(v, Settings) else v) for (k, v) in self.values.items()}
+    
+    @property
+    def public_values_dictionary(self):
+        values = self.values_dictionary
+        for key in self.private_keys:
+            values.pop(key, None)
+        return values
     
     def setup_properties(self, defaults):
         pass
