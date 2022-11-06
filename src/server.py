@@ -106,6 +106,7 @@ class Server:
         settings = self.settings
         # TODO This should be machine.SOFT_RESET instead of '5' but I can't get the import to work
         if machine.reset_cause() != 5 and not self.have_configured_wlan:
+            print("Hard reset: Configuring network interface. Reset cause is " + str(machine.reset_cause()))
             self.wlan = wlan = network.WLAN(network.STA_IF)
             wlan.active(True)
             wlan.config(pm = 0xa11140)  # Disable power-save mode
@@ -114,6 +115,7 @@ class Server:
             #if settings.ip != '' and settings.net_mask != '' and settings.gateway != '' and settings.nameserver != '':
             #    wlan.ifconfig(config=(settings.ip, settings.net_mask, settings.gateway, settings.nameserver))
             self.have_configured_wlan = True
+            await asyncio.sleep(1)
         else:
             wlan = self.wlan
 
@@ -125,11 +127,11 @@ class Server:
                 if wlan.status() < 0 or wlan.status() >= 3:
                     break
                 retries -= 1
-                print('waiting for connection to SSID {}...'.format(settings.ssid))
+                print('waiting for connection to SSID {}. Current status = {}'.format(settings.ssid, wlan.status()))
                 await asyncio.sleep(1)
 
         if not wlan.isconnected():
-            raise RuntimeError('network connection failed')
+            raise RuntimeError('network connection failed ' + str(wlan.status()))
         else:
             print('connected')
             status = wlan.ifconfig()

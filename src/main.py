@@ -5,10 +5,12 @@ from settings import ValueScale
 from server import Server
 from server import flatten_dict
 from ringlog import RingLog
+from emptylock import EmptyLock
 
 import ujson
 import time
 import sys
+import _thread
 
 from machine import Pin
 from machine import WDT
@@ -66,6 +68,7 @@ drain_solenoid_pin = const(14)
 compressor_motor_status_pin = const("LED")
 compressor_active_status_pin = const(2)
 purge_active_status_pin = const(3)
+use_multiple_threads = False
         
 ####################
 # Logging Functions
@@ -188,13 +191,30 @@ MOTOR_STATE_PRESSURE=const('overpressure')      # upper pressure limit reached
 MOTOR_STATE_DUTY=const('duty')                  # duty limit reached
 MOTOR_STATE_PURGE=const('purge')                # purging in progress, motor disabled
 
+# Compressor monitors the state of the compressor and controls the
+# motor and drain valve.
+#
+# Compressor is designed so that it can be run as a coroutine, or on
+# hardware that supports it, as a background thread. Running as a thread
+# means that there's no risk of a foreground coroutine stealing all of the
+# cycles and leaving the compressor update task unmonitored.
+#
+# All of the public access methods acquire a lock so that the state of the
+# compressor isn't being queried while its updated. It is thus safe to call
+# any of the public methods from another thread.
+#
+# The logs used by the compressor are only updated while a lock is held, so
+# if a caller wants to access the logs it should aquire compressor.lock first
+# to ensure that the logs aren't mutated while they are being read.
 class Compressor:
-    def __init__(self, settings):
+    def __init__(self, settings, thread_safe = False):
         self.activity_log = EventLog()
         self.command_log = CommandLog()
         self.state_log = StateLog(settings)
         
         self.settings = settings
+        self.lock = EmptyLock.create_lock(thread_safe)
+        self.thread_safe = thread_safe
         
         # Configuration
         self.poll_interval = 1           # The time interval at which to update the compressor state
@@ -225,7 +245,11 @@ class Compressor:
         self._update_status()
 
     def _update_status(self):
-        self.motor_status.value(self.compressor_motor.value())
+        # TODO For reasons that I cannot fathom, updating the LED from a thread
+        #      is causing the thread to deadlock. I can disable this for now.
+        #      I was intending to move this code to the UI update thread anyhow
+        if not self.thread_safe:
+            self.motor_status.value(self.compressor_motor.value())
         self.compressor_on_status.value(self.compressor_is_on)
         self.purge_status.value(self.drain_solenoid.value())
     
@@ -234,7 +258,7 @@ class Compressor:
         self.line_pressure = self.settings.line_pressure_sensor.map(self.line_pressure_ADC.read_u16())
     
     @property
-    def state(self):
+    def _state(self):
         if self.motor_state == MOTOR_STATE_RUN:
             short_state = 'R'
         elif self.motor_state == MOTOR_STATE_OFF:
@@ -255,66 +279,80 @@ class Compressor:
         return ('O' if self.compressor_is_on else '_') + short_state + ('P' if self.purge_valve_open else '_')
     
     @property
-    def state_dictionary(self):
-        self._read_ADC()
-        
-        tank_pressure = -1 if self.tank_pressure is None else self.tank_pressure
-        line_pressure = -1 if self.line_pressure is None else self.line_pressure
-        return {
-            "system_time": time.time(),
-            "tank_pressure": tank_pressure,
-            "line_pressure": line_pressure,
-            "tank_underpressure": tank_pressure < self.settings.start_pressure,
-            "line_underpressure": line_pressure < self.settings.min_line_pressure or
-                                  tank_pressure < self.settings.min_line_pressure,
-            "compressor_on": self.compressor_is_on,
-            "motor_state": self.motor_state,
-            "run_request": self.request_run_flag,
-            "purge_open": self.purge_valve_open,
-            "purge_pending": self.purge_pending,
-            "shutdown": self.shutdown_time,
-            "duty_recovery_time": self.duty_recovery_time,
-            "duty": self.activity_log.calculate_duty(self.settings.duty_duration),
-            "duty_60": self.activity_log.calculate_duty(60*60)
-        }        
+    def state_dictionary(self):        
+        with self.lock:
+            self._read_ADC()
+            
+            tank_pressure = -1 if self.tank_pressure is None else self.tank_pressure
+            line_pressure = -1 if self.line_pressure is None else self.line_pressure
+            
+            with self.settings.lock:
+                start_pressure = self.settings.start_pressure
+                min_line_pressure = self.settings.min_line_pressure
+                duty_duration = self.settings.duty_duration
+            
+            return {
+                "system_time": time.time(),
+                "tank_pressure": tank_pressure,
+                "line_pressure": line_pressure,
+                "tank_underpressure": tank_pressure < start_pressure,
+                "line_underpressure": line_pressure < min_line_pressure or
+                                      tank_pressure < min_line_pressure,
+                "compressor_on": self.compressor_is_on,
+                "motor_state": self.motor_state,
+                "run_request": self.request_run_flag,
+                "purge_open": self.purge_valve_open,
+                "purge_pending": self.purge_pending,
+                "shutdown": self.shutdown_time,
+                "duty_recovery_time": self.duty_recovery_time,
+                "duty": self.activity_log.calculate_duty(duty_duration),
+                "duty_60": self.activity_log.calculate_duty(60*60)
+            }        
     
     # The next time the compressor is updated it will start to run if it can
     def request_run(self):
-        self.request_run_flag = True
-        self.command_log.log_command(COMMAND_RUN)
+        with self.lock:
+            self.request_run_flag = True
+            self.command_log.log_command(COMMAND_RUN)
     
     # Enables the on state. The motor will be automatically turned on and off
     # as needed based on the settings
     def compressor_on(self, shutdown_in):
-        if shutdown_in == None:
-            shutdown_in = self.settings.auto_stop_time
-            
-        if not self.compressor_is_on:
-            self.command_log.log_command(COMMAND_ON)
-            self.compressor_is_on = True
+        with self.lock:        
+            if shutdown_in == None:
+                shutdown_in = self.settings.auto_stop_time
+                
+            if not self.compressor_is_on:
+                self.command_log.log_command(COMMAND_ON)
+                self.compressor_is_on = True
 
-            # If the shutdown parameter is > 0, schedule the shutdown relative to now
-            if shutdown_in > 0:
-                self.shutdown_time = time.time() + shutdown_in
+                # If the shutdown parameter is > 0, schedule the shutdown relative to now
+                if shutdown_in > 0:
+                    self.shutdown_time = time.time() + shutdown_in
     
     def compressor_off(self):
-        # Make sure that the compressor is off
-        self._pause(MOTOR_STATE_OFF)
+        with self.lock:
+            # Make sure that the compressor is off
+            self._pause(MOTOR_STATE_OFF)
 
-        # If it was active before the call then
-        # trigger any stop actions
-        if self.compressor_is_on:
-            self.command_log.log_command(COMMAND_OFF)            
-            # Clear the active flag and the shutdown time
-            self.compressor_is_on = False
-            self.shutdown_time = 0
+            # If it was active before the call then
+            # trigger any stop actions
+            if self.compressor_is_on:
+                self.command_log.log_command(COMMAND_OFF)            
+                # Clear the active flag and the shutdown time
+                self.compressor_is_on = False
+                self.shutdown_time = 0
 
-            self.purge()
+                self.purge()
 
     def purge(self, duration = None, delay = None):
-        self.command_log.log_command(COMMAND_PURGE)
+        with self.lock:
+            self.command_log.log_command(COMMAND_PURGE)
         self.purge_task = asyncio.create_task(self._purge(duration, delay))
 
+    # NOTE: Unlike most private Compressor methods, this runs as a coroutine
+    #       On the foreground thread, not on the background thread. Thus it
+    #       must aquire a lock before performing any compressor specific actions
     async def _purge(self, duration, delay):
         if duration is None:
             duration = self.settings.drain_duration
@@ -322,21 +360,24 @@ class Compressor:
             delay = self.settings.drain_delay
             
         if duration > 0:
-            self.purge_pending = True
+            with self.lock:
+                self.purge_pending = True
             await asyncio.sleep(delay)
-            # If the motor is running, stop it
-            self._pause(MOTOR_STATE_PURGE)
-            
-            # Open the drain solenoid
-            self.drain_solenoid.value(1)            
-            self.activity_log.log_start(EVENT_PURGE)
-            self.purge_pending = False
-            self.purge_valve_open = True
+            with self.lock:
+                # If the motor is running, stop it
+                self._pause(MOTOR_STATE_PURGE)
+                
+                # Open the drain solenoid
+                self.drain_solenoid.value(1)            
+                self.activity_log.log_start(EVENT_PURGE)
+                self.purge_pending = False
+                self.purge_valve_open = True
             
             await asyncio.sleep(duration)
-            self.drain_solenoid.value(0)    
-            self.activity_log.log_stop()
-            self.purge_valve_open = False
+            with self.lock:
+                self.drain_solenoid.value(0)    
+                self.activity_log.log_stop()
+                self.purge_valve_open = False
 
     def _run_motor(self):
         self.compressor_motor.value(1)
@@ -347,8 +388,9 @@ class Compressor:
             self.activity_log.log_start(EVENT_RUN)
 
     def pause(self):
-        self.command_log.log_command(COMMAND_PAUSE)
-        self._pause(MOTOR_STATE_PAUSE)
+        with self.lock:
+            self.command_log.log_command(COMMAND_PAUSE)
+            self._pause(MOTOR_STATE_PAUSE)
         
     def _pause(self, reason):
         self.compressor_motor.value(0)
@@ -369,7 +411,7 @@ class Compressor:
         else:
             current_duty = 0
 
-        self.state_log.log_state(current_pressure, self.line_pressure, current_duty, self.state)
+        self.state_log.log_state(current_pressure, self.line_pressure, current_duty, self._state)
                     
         # If the auto shutdown time has arrived schedule a shtudown task
         if self.shutdown_time > 0 and current_time > self.shutdown_time and self.compressor_is_on:
@@ -412,22 +454,40 @@ class Compressor:
             self._run_motor()
 
     async def _run(self):
-        # Setup a watchdog timer to ensure that the compressor is always updated. If another coroutine
-        # steals too many cycles the board will be rebooted rather than risking leaving the compressor
-        # unattended.
-        # TODO Disabling the watchdog because some of the networking calls aren't 100% async
-        #      This needs to be resolved before production
-        #watchdog = WDT(timeout=2000)
-
-        while True:
-            #watchdog.feed()
+        print("WARNING: No watchdog timer in single thread mode. This is potentially dangerous.")
+        while True:                
             self._update()
             self._update_status()
             await asyncio.sleep(self.poll_interval)
+        
+    def _run_thread(self):
+        # Setup a watchdog timer to ensure that the compressor is always updated. If something
+        # steals too many cycles the board will be rebooted rather than risk leaving the compressor
+        # unattended.
+        watchdog = WDT(timeout=2000)
+        
+        while True:
+            watchdog.feed()
             
+            with self.lock:
+                self._update()
+                self._update_status()
+            # Put the thread to sleep
+            time.sleep(self.poll_interval)
+        
+        print("WARNING: Background thread event loop has finished")
+         
     def run(self):
-        self.run_task = asyncio.create_task(self._run())
-            
+        if self.thread_safe:
+            print("Compressor instance is threadsafe. Starting a background thread.")
+            _thread.start_new_thread(self._run_thread, ())        
+        else:            
+            # Note that no watchdog is created in this case. Unfortunately some of the networking
+            # calls aren't 100% async and may block long enough to allow the interrupt to fire
+            # This makes running in single threaded mode somewhat suspect
+            print("Compressor instance is not threadsafe. Running using coroutines.")
+            self.run_task = asyncio.create_task(self._run())
+
 ####################
 # Network Functions
 #
@@ -470,6 +530,8 @@ class CompressorServer(Server):
                 if endpoint == '/settings':
                     if len(parameters) > 0:
                         try:
+                            # settings are only updated from the main thread, so it is sufficient
+                            # to rely on the individual locks in these two methods
                             self.settings.update(parameters)
                             self.settings.write_delta()
                             
@@ -501,17 +563,27 @@ class CompressorServer(Server):
                     # Return all state logs since a value supplied by the caller (or all logs if there is no since)
                     self.response_header(writer)
                     writer.write('{"time":' + str(time.time()) + ',"activity":[')
-                    # Return all activity logs that end after since
-                    await compressor.activity_log.dump(writer, int(parameters.get('since', 0)), 1)
-                    writer.write('],"commands":[')
-                    # Return all command logs that fired after since
-                    await compressor.command_log.dump(writer, int(parameters.get('since', 0)))
+                    # The compressor needs to be locked so that the logs can be accessed. To prevent
+                    # holding the lock for too long, the dump commands set blocking to False. But this
+                    # will require the buffer to hold all of the data that is being sent, so it is a memory
+                    # consumption risk.
+                    with compressor.lock:
+                        # Return all activity logs that end after since
+                        await compressor.activity_log.dump(writer, int(parameters.get('since', 0)), 1, blocking = not compressor.thread_safe)
+                        writer.write('],"commands":[')
+                        # Return all command logs that fired after since
+                        await compressor.command_log.dump(writer, int(parameters.get('since', 0)), blocking = not compressor.thread_safe)
                     writer.write(']}')
                 elif endpoint == '/state_logs':
                     # Return all state logs since a value supplied by the caller (or all logs if there is no since)
                     self.response_header(writer)
-                    writer.write('{"time":' + str(time.time()) + ',"maxDuration":' + str(compressor.state_log.max_duration) + ',"state":[')
-                    await compressor.state_log.dump(writer, int(parameters.get('since', 0)))
+                    # The compressor needs to be locked so that the logs can be accessed. To prevent
+                    # holding the lock for too long, the dump commands set blocking to False. But this
+                    # will require the buffer to hold all of the data that is being sent, so it is a memory
+                    # consumption risk.
+                    with compressor.lock:
+                        writer.write('{"time":' + str(time.time()) + ',"maxDuration":' + str(compressor.state_log.max_duration) + ',"state":[')
+                        await compressor.state_log.dump(writer, int(parameters.get('since', 0)), blocking = compressor.thread_safe)
                     writer.write(']}')
                 elif endpoint == '/on':
                     shutdown_time = parameters.get("shutdown_in", None)
@@ -550,6 +622,8 @@ class CompressorServer(Server):
                     parameters = ujson.loads(raw_data)
 
                     try:
+                        # settings are only updated from the main thread, so it is sufficient
+                        # to rely on the individual locks in these two methods
                         self.settings.update(parameters)
                         self.settings.write_delta()
                         
@@ -582,21 +656,13 @@ class CompressorServer(Server):
 #######################
 # Main
 
-async def main():
-    settings = CompressorSettings(default_settings)
-    
-    # Run the compressor no matter what. It is essential that the compressor pressure is monitored
-    compressor = Compressor(settings)
-    compressor.run()
-    
-    if settings.compressor_on_power_up:
-        compressor.compressor_on(None)
-    
+async def startUI(compressor, settings):
     # Catch any connection error, since it is non fatal. A connection is desired, but not required
     try:
         global server
         server = CompressorServer(compressor, settings)
         server.run()
+        # TODO Since run only schedules a coroutine, I doubt that this exception is ever hit
     except Exception as e:
         print("Network error. Running without API.")
         sys.print_exception(e)
@@ -605,7 +671,22 @@ async def main():
     #asyncio.get_event_loop().run_forever()
     while True:
         await asyncio.sleep(10000)
-    print("Main() is done.")
+
+    print("WARNING: UI co-routines are done.")
+    
+async def main():
+    settings = CompressorSettings(default_settings, thread_safe = use_multiple_threads)
+    
+    # Run the compressor no matter what. It is essential that the compressor
+    # pressure is monitored
+    compressor = Compressor(settings, thread_safe = use_multiple_threads)
+    compressor.run()
+    
+    if settings.compressor_on_power_up:
+        compressor.compressor_on(None)
+    
+    await startUI(compressor, settings)
+
 
 # TODO Not sure about the implications of this finally block
 try:

@@ -28,8 +28,17 @@ class RingLog:
         self[0] = log_tuple
                 
     # Outputs all entries in the log as json pairs without having to allocate one big string
-    async def dump(self, writer, since, filter_index = 0):
-        await writer.drain()
+    # NOTE If the blocking parameter is false, then the writer will not be drained. The caller
+    #      will not be blocked, but it will also be necessary for the writer to buffer all of
+    #      the data, so the memory consumption will be much larger. This is an unfortunate
+    #      tradeoff if the caller requires a lock on another thread. In many cases it may be
+    #      fine to block the calling thread for the duration of the write, but there is a risk
+    #      that if the buffer fill up the caller may be blocked while waiting on the network to
+    #      flush (on the flip side, bytes may be lost if the buffer is full. I'm not sure how
+    #      this is handled)
+    async def dump(self, writer, since, filter_index = 0, blocking = True):
+        if blocking:
+            await writer.drain()
         
         first_log = True
         for i in range(self.count):
@@ -57,7 +66,8 @@ class RingLog:
                     
                     writer.write('"' + field + '":' + str(value))
                 writer.write("}")
-                await writer.drain()
+                if blocking:
+                    await writer.drain()
         
     def __getitem__(self, index):
         wrapped_index = (self.end_index - index) % self.size_limit
@@ -74,4 +84,5 @@ class RingLog:
         
     def __len__(self):
         return self.count
+    
     
