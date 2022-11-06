@@ -77,8 +77,8 @@ EVENT_RUN=const(b'R')
 EVENT_PURGE=const(b'P')
 
 class EventLog(RingLog):
-    def __init__(self):
-        RingLog.__init__(self, "LLs", ["start", "stop", "event"], 40)
+    def __init__(self, thread_safe = True):
+        RingLog.__init__(self, "LLs", ["start", "stop", "event"], 40, thread_safe = thread_safe)
         self.console_log = False
         self.activity_open = False
     
@@ -90,26 +90,28 @@ class EventLog(RingLog):
         
     # Open a new log entry for the start time
     def log_start(self, event):
-        start = time.time()
-        # TODO Instead of + 1000000 this should just be int max, for the max possible time
-        self.log((start, start + 100000000, event))
-        self.activity_open = True
+        with self.lock:
+            start = time.time()
+            # TODO Instead of + 1000000 this should just be int max, for the max possible time
+            self.log((start, start + 100000000, event))
+            self.activity_open = True
         
     # Update the current log entry with the current time
     def log_stop(self):
-        if self.activity_open:
-            # Grab the most recent log (for the open activity)
-            current_log = self[0]
-            
-            # Extract the log properties
-            event = current_log[2]
-            start = current_log[0]
-            
-            stop = time.time()
-            
-            # Update the log with the current time as the stop time
-            self[0] = (start, stop, event)
-            self.activity_open = False
+        with self.lock:
+            if self.activity_open:
+                # Grab the most recent log (for the open activity)
+                current_log = self[0]
+                
+                # Extract the log properties
+                event = current_log[2]
+                start = current_log[0]
+                
+                stop = time.time()
+                
+                # Update the log with the current time as the stop time
+                self[0] = (start, stop, event)
+                self.activity_open = False
             
     def calculate_duty(self, duration):
         now = time.time()
@@ -120,30 +122,31 @@ class EventLog(RingLog):
             query_start = now
         
         # Find the total time that the compressor was running in the window (query_start - now)
-        total_runtime = 0
-        for i in range(len(self)):
-            log = self[i]
-            event = log[2]
-            # Logs that are 'open' will have a stop time in the distant future. Logs that
-            # end within the interval may have started before it began. Clamp the stop and
-            # stop times to the query window.
-            start = max(query_start, log[0])
-            stop = min(now, log[1])
-            #print("calculate_duty have log: start = %d stop = %d" % (start, stop))
-            # Count the time for this event if this is a run event in the window from
-            # (query_start - now). Since the start and stop times of the log have been
-            # clamped to the query window this can be tested by checking to see if the
-            # clamped interval is not empty.
-            if event == EVENT_RUN and stop > start:
-                total_runtime += stop - start
+        with self.lock:
+            total_runtime = 0
+            for i in range(len(self)):
+                log = self[i]
+                event = log[2]
+                # Logs that are 'open' will have a stop time in the distant future. Logs that
+                # end within the interval may have started before it began. Clamp the stop and
+                # stop times to the query window.
+                start = max(query_start, log[0])
+                stop = min(now, log[1])
+                #print("calculate_duty have log: start = %d stop = %d" % (start, stop))
+                # Count the time for this event if this is a run event in the window from
+                # (query_start - now). Since the start and stop times of the log have been
+                # clamped to the query window this can be tested by checking to see if the
+                # clamped interval is not empty.
+                if event == EVENT_RUN and stop > start:
+                    total_runtime += stop - start
+            
+            duty = total_runtime/duration
         
-        duty = total_runtime/duration
-    
-        # For debugging the duty calculations can be logged
-        #print("Compressor has run for %d of the last %d seconds. Duty cycle is %f%%" % (total_runtime, duration, duty*100))
-        
-        # Return the percentage of the sample window where the compressor was running
-        return duty
+            # For debugging the duty calculations can be logged
+            #print("Compressor has run for %d of the last %d seconds. Duty cycle is %f%%" % (total_runtime, duration, duty*100))
+            
+            # Return the percentage of the sample window where the compressor was running
+            return duty
     
 COMMAND_ON=const(b'O')
 COMMAND_OFF=const(b'F')
@@ -152,16 +155,16 @@ COMMAND_PAUSE=const(b'|')
 COMMAND_PURGE=const(b'P')
 
 class CommandLog(RingLog):
-    def __init__(self):
-        RingLog.__init__(self, "Ls", ["time", "command"], 10)
+    def __init__(self, thread_safe):
+        RingLog.__init__(self, "Ls", ["time", "command"], 10, thread_safe = thread_safe)
         self.console_log = False
 
     def log_command(self, event):
         self.log((time.time(), event))
 
 class StateLog(RingLog):
-    def __init__(self, settings):
-        RingLog.__init__(self, "Lfff3s", ["time", "tank_pressure", "line_pressure", "duty", "state"], 200)
+    def __init__(self, settings, thread_safe):
+        RingLog.__init__(self, "Lfff3s", ["time", "tank_pressure", "line_pressure", "duty", "state"], 200, thread_safe = thread_safe)
         self.last_log_time = 0
         self.settings = settings
         self.console_log = False
@@ -208,9 +211,9 @@ MOTOR_STATE_PURGE=const('purge')                # purging in progress, motor dis
 # to ensure that the logs aren't mutated while they are being read.
 class Compressor:
     def __init__(self, settings, thread_safe = False):
-        self.activity_log = EventLog()
-        self.command_log = CommandLog()
-        self.state_log = StateLog(settings)
+        self.activity_log = EventLog(thread_safe = thread_safe)
+        self.command_log = CommandLog(thread_safe = thread_safe)
+        self.state_log = StateLog(settings, thread_safe = thread_safe)
         
         self.settings = settings
         self.lock = EmptyLock.create_lock(thread_safe)
@@ -346,8 +349,7 @@ class Compressor:
                 self.purge()
 
     def purge(self, duration = None, delay = None):
-        with self.lock:
-            self.command_log.log_command(COMMAND_PURGE)
+        self.command_log.log_command(COMMAND_PURGE)
         self.purge_task = asyncio.create_task(self._purge(duration, delay))
 
     # NOTE: Unlike most private Compressor methods, this runs as a coroutine
@@ -563,27 +565,26 @@ class CompressorServer(Server):
                     # Return all state logs since a value supplied by the caller (or all logs if there is no since)
                     self.response_header(writer)
                     writer.write('{"time":' + str(time.time()) + ',"activity":[')
-                    # The compressor needs to be locked so that the logs can be accessed. To prevent
-                    # holding the lock for too long, the dump commands set blocking to False. But this
-                    # will require the buffer to hold all of the data that is being sent, so it is a memory
-                    # consumption risk.
-                    with compressor.lock:
-                        # Return all activity logs that end after since
-                        await compressor.activity_log.dump(writer, int(parameters.get('since', 0)), 1, blocking = not compressor.thread_safe)
-                        writer.write('],"commands":[')
-                        # Return all command logs that fired after since
-                        await compressor.command_log.dump(writer, int(parameters.get('since', 0)), blocking = not compressor.thread_safe)
+                    # The logs need to be locked so that they can be accessed. To prevent holding the lock
+                    # for too long (which could block the compressor thread), the dump commands set blocking
+                    # to False. But this will require the buffer to hold all of the data that is being sent,
+                    # so it is a memory consumption risk.
+                    
+                    # Return all activity logs that end after since
+                    await compressor.activity_log.dump(writer, int(parameters.get('since', 0)), 1, blocking = not compressor.thread_safe)
+                    writer.write('],"commands":[')
+                    # Return all command logs that fired after since
+                    await compressor.command_log.dump(writer, int(parameters.get('since', 0)), blocking = not compressor.thread_safe)
                     writer.write(']}')
                 elif endpoint == '/state_logs':
                     # Return all state logs since a value supplied by the caller (or all logs if there is no since)
                     self.response_header(writer)
-                    # The compressor needs to be locked so that the logs can be accessed. To prevent
-                    # holding the lock for too long, the dump commands set blocking to False. But this
-                    # will require the buffer to hold all of the data that is being sent, so it is a memory
-                    # consumption risk.
-                    with compressor.lock:
-                        writer.write('{"time":' + str(time.time()) + ',"maxDuration":' + str(compressor.state_log.max_duration) + ',"state":[')
-                        await compressor.state_log.dump(writer, int(parameters.get('since', 0)), blocking = compressor.thread_safe)
+                    # The logs need to be locked so that they can be accessed. To prevent holding the lock
+                    # for too long (which could block the compressor thread), the dump commands set blocking
+                    # to False. But this will require the buffer to hold all of the data that is being sent,
+                    # so it is a memory consumption risk.
+                    writer.write('{"time":' + str(time.time()) + ',"maxDuration":' + str(compressor.state_log.max_duration) + ',"state":[')
+                    await compressor.state_log.dump(writer, int(parameters.get('since', 0)), blocking = compressor.thread_safe)
                     writer.write(']}')
                 elif endpoint == '/on':
                     shutdown_time = parameters.get("shutdown_in", None)
