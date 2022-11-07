@@ -171,8 +171,7 @@ class StateLog(RingLog):
         #print("now = " + str(now) + " since last " + str(since_last) + " Interval " + str(self.settings.log_interval))
         if since_last > self.settings.log_interval:
             self.last_log_time = now
-            self.log((now, -1 if tank_pressure is None else tank_pressure,
-                           -1 if line_pressure is None else line_pressure, duty, state))
+            self.log((now, tank_pressure, line_pressure, duty, state))
             
     @property
     def max_duration(self):
@@ -226,7 +225,9 @@ class Compressor:
         self.purge_pending = False       # True when a purge is pending, false when it is not
         self.shutdown_time = 0           # The time when the compressor is scheduled to shutdown
         self.duty_recovery_time = 0      # The time when the motor will have recovered from the last duty cycle violation
-
+        self.tank_sensor_error = False   # The tank pressure sensor has detected an out of range value
+        self.line_sensor_error = False   # The line pressure sensor has detected an out of range value
+        
         # Locate hardware registers
         self.tank_pressure_ADC = machine.ADC(tank_pressure_pin)
         self.line_pressure_ADC = machine.ADC(line_pressure_pin)        
@@ -255,6 +256,15 @@ class Compressor:
     def _read_ADC(self):
         self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())        
         self.line_pressure = self.settings.line_pressure_sensor.map(self.line_pressure_ADC.read_u16())
+        
+        # If either sensor returns None there is an error. Record the error, and then
+        # set the value to -1 so that it is a valid integer for calculations and serialization
+        self.tank_sensor_error = self.tank_pressure is None
+        self.line_sensor_error = self.tank_pressure is None
+        if self.tank_pressure is None:
+            self.tank_pressure = -1
+        if self.line_pressure is None:
+            self.line_pressure = -1
     
     @property
     def _state(self):
@@ -282,8 +292,8 @@ class Compressor:
         with self.lock:
             self._read_ADC()
             
-            tank_pressure = -1 if self.tank_pressure is None else self.tank_pressure
-            line_pressure = -1 if self.line_pressure is None else self.line_pressure
+            tank_pressure = self.tank_pressure
+            line_pressure = self.line_pressure
             
             with self.settings.lock:
                 start_pressure = self.settings.start_pressure
@@ -297,6 +307,8 @@ class Compressor:
                 "tank_underpressure": tank_pressure < start_pressure,
                 "line_underpressure": line_pressure < min_line_pressure or
                                       tank_pressure < min_line_pressure,
+                "tank_sensor_error": self.tank_sensor_error,
+                "line_sensor_error": self.line_sensor_error,
                 "compressor_on": self.compressor_is_on,
                 "motor_state": self.motor_state,
                 "run_request": self.request_run_flag,
@@ -423,8 +435,8 @@ class Compressor:
             self._pause(MOTOR_STATE_PURGE)
             return
 
-        # If the sensor value is out of range then shut off the motor
-        if current_pressure == None:
+        # If the tank sensor value is out of range then shut off the motor
+        if self.tank_sensor_error:
             self._pause(MOTOR_STATE_SENSOR_ERROR)
             return
                         

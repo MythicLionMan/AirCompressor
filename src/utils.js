@@ -160,6 +160,8 @@ class StateMonitor {
             'run_request': false,
             'tank_underpressure': false,
             'line_underpressure': false,
+            'tank_sensor_error': false,
+            'line_sensor_error': false,
             'motor_state': 'run',
             'purge_open': true,
             'purge_pending': false,
@@ -238,7 +240,8 @@ class StateMonitor {
     updateClassesWithCompressorState(state) {
         let stateClassNames = [
             'compressor_on', 'run_request', 'purge_pending', 'purge_open', 
-            'tank_underpressure', 'line_underpressure'
+            'tank_underpressure', 'line_underpressure', 'tank_sensor_error',
+            'line_sensor_error'
         ];
         
         for (let element of this.stateElements) {
