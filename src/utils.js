@@ -1,5 +1,5 @@
 settings = {
-    debug: false,
+    debug: window.location.href.startsWith('file://'),
     stateQueryInterval: 5000,
     chartQueryInterval: 5000,
     chartDuration: [ 5*60*1000, 10*60*1000, 20*60*1000 ]
@@ -238,20 +238,47 @@ class StateMonitor {
     // Updates the html classes that are assigned to elements with a state
     // class.
     updateClassesWithCompressorState(state) {
-        let stateClassNames = [
+        let booleanStateClassNames = [
             'compressor_on', 'run_request', 'purge_pending', 'purge_open', 
             'tank_underpressure', 'line_underpressure', 'tank_sensor_error',
             'line_sensor_error'
         ];
+
+        // Calculate some extra compound states that are difficult or impossible in css
+        let addStates = []
+        let removeStates = []
+        if ('tank_underpressure' in state) {
+            // Cannot pause or run if the tank is not in its target pressure range
+            removeStates.push('pause_command_available');
+            removeStates.push('run_command_available');
+        } else {
+            if (state.motor_state == 'run') {
+                addStates.push('pause_command_available');
+            } else {
+                removeStates.push('pause_command_available');
+            }
+
+            if (Set(['pause', 'overpressure', 'duty']).has(state.motor_state)) {
+                addStates.push('run_command_available');
+            } else {
+                removeStates.push('run_command_available');
+            }
+        }
         
         for (let element of this.stateElements) {
             element.classList.remove('undefined_state');
-            for (const className of stateClassNames) {
+            for (const className of booleanStateClassNames) {
                 if (state[className]) {
                     element.classList.add(className);
                 } else {
                     element.classList.remove(className);                
                 }
+            }
+            for (const className of addStates) {
+                element.classList.add(className);
+            }
+            for (const className of removeStates) {
+                element.classList.remove(className);                
             }
         }
         
@@ -268,7 +295,7 @@ class StateMonitor {
             
             // Add the current motorState class
             element.classList.add(motorState);
-        }
+        }        
     }
         
     synchronizeTime(data) {
