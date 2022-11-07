@@ -277,7 +277,7 @@ class StateMonitor {
 
     // Initiates a fetch and handles the result
     fetchState() {
-        if (this.fetchPending) return;
+        //if (this.fetchPending) return;
         this.fetchPending = true;
         let t = this;
         
@@ -553,7 +553,7 @@ class ChartMonitor {
         console.log('Updating chart…');
         let t = this;
         
-        if (!this.stateFetchPending) {
+        if (true || !this.stateFetchPending) {
             this.stateFetchPending = true;
             
             // Query the server for state logs that are after the last state
@@ -572,7 +572,7 @@ class ChartMonitor {
         
         // Query the server for activity logs that end after the last 
         // update that we received.
-        if (!this.activityFetchPending) {
+        if (true || !this.activityFetchPending) {
             this.activityFetchPending = true;
                 
             fetch('/activity_logs?since=' + this.last_activity_update.toString(), {

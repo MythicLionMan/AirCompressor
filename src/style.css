@@ -40,6 +40,10 @@
 .compressor_error .visibleWhenCompressorError {
     display: inline;
 }
+/* Only visible when an ancestor has the sensor error class */
+.motor_state_sensor_error .visibleWhenSensorError {
+    display: inline;
+}
 /* Only visible when an ancestor has the motor_state_duty class */
 .motor_state_duty .visibleWhenDutyBlocked {
     display: table-row;
@@ -68,8 +72,8 @@
  * Visual Styles
  */
 
-/* Compressor errors are in large red text */
-.visibleWhenCompressorError {
+/* Errors are in large red text */
+.visibleWhenCompressorError, .visibleWhenSensorError {
     color: red;
     font-size: large;
 }
