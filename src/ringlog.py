@@ -1,5 +1,5 @@
 import ustruct as struct
-from emptylock import EmptyLock
+from condlock import CondLock
 
 # Provides an efficient ring buffer for storing logs. The buffer is a
 # bytearray, and logs are packed into it, so no allocations are needed
@@ -11,7 +11,7 @@ class RingLog:
         self.size_limit = size_limit
         self.struct_format = struct_format
         self.field_names = field_names
-        self.lock = EmptyLock.create_lock(thread_safe)
+        self.lock = CondLock(thread_safe)
 
         self.stride = struct.calcsize(struct_format)
         self.data = bytearray(size_limit * self.stride)
@@ -77,7 +77,7 @@ class RingLog:
                     writer.write("}")
                     if blocking:
                         await writer.drain()
-        
+
     def __getitem__(self, index):
         with self.lock:
             wrapped_index = (self.end_index - index) % self.size_limit
@@ -89,10 +89,10 @@ class RingLog:
             wrapped_index = (self.end_index - index) % self.size_limit
 
             struct.pack_into(self.struct_format, self.data, wrapped_index * self.stride, *log_tuple)
-            
-        if self.console_log:
-            print("Logged[{}]: {}".format(wrapped_index, log_tuple))        
         
+        if self.console_log:
+            print("Logged[{}]: {}".format(wrapped_index, log_tuple))
+
     def __len__(self):
         with self.lock:
             return self.count

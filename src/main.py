@@ -5,12 +5,13 @@ from settings import ValueScale
 from server import Server
 from server import flatten_dict
 from ringlog import RingLog
-from emptylock import EmptyLock
+from condlock import CondLock
 
 import ujson
 import time
 import sys
 import _thread
+import gc
 
 from machine import Pin
 from machine import WDT
@@ -68,8 +69,9 @@ drain_solenoid_pin = const(14)
 compressor_motor_status_pin = const("LED")
 compressor_active_status_pin = const(2)
 purge_active_status_pin = const(3)
-use_multiple_threads = False
-        
+use_multiple_threads = True
+memory_debug = False
+
 ####################
 # Logging Functions
 
@@ -81,13 +83,7 @@ class EventLog(RingLog):
         RingLog.__init__(self, "LLs", ["start", "stop", "event"], 40, thread_safe = thread_safe)
         self.console_log = False
         self.activity_open = False
-    
-    def d(self):
-        print("== history")
-        for i in range(len(self)):
-            print(self[i])
-        print("==")
-        
+            
     # Open a new log entry for the start time
     def log_start(self, event):
         with self.lock:
@@ -122,7 +118,7 @@ class EventLog(RingLog):
             query_start = now
         
         # Find the total time that the compressor was running in the window (query_start - now)
-        with self.lock:
+        with self.lock:            
             total_runtime = 0
             for i in range(len(self)):
                 log = self[i]
@@ -216,7 +212,7 @@ class Compressor:
         self.state_log = StateLog(settings, thread_safe = thread_safe)
         
         self.settings = settings
-        self.lock = EmptyLock.create_lock(thread_safe)
+        self.lock = CondLock(thread_safe)
         self.thread_safe = thread_safe
         
         # Configuration
@@ -320,7 +316,7 @@ class Compressor:
     
     # Enables the on state. The motor will be automatically turned on and off
     # as needed based on the settings
-    def compressor_on(self, shutdown_in):
+    def compressor_on(self, shutdown_in = None):
         with self.lock:        
             if shutdown_in == None:
                 shutdown_in = self.settings.auto_stop_time
@@ -332,6 +328,7 @@ class Compressor:
                 # If the shutdown parameter is > 0, schedule the shutdown relative to now
                 if shutdown_in > 0:
                     self.shutdown_time = time.time() + shutdown_in
+
     
     def compressor_off(self):
         with self.lock:
@@ -455,7 +452,7 @@ class Compressor:
             self.request_run_flag = False
             self._run_motor()
 
-    async def _run(self):
+    async def _run_coroutine(self):
         print("WARNING: No watchdog timer in single thread mode. This is potentially dangerous.")
         while True:                
             self._update()
@@ -466,7 +463,7 @@ class Compressor:
         # Setup a watchdog timer to ensure that the compressor is always updated. If something
         # steals too many cycles the board will be rebooted rather than risk leaving the compressor
         # unattended.
-        watchdog = WDT(timeout=2000)
+        watchdog = WDT(timeout=5000)
         
         while True:
             watchdog.feed()
@@ -474,6 +471,11 @@ class Compressor:
             with self.lock:
                 self._update()
                 self._update_status()
+            
+            if memory_debug:
+                gc.collect()
+                print('{} Allocated = {} free = {}'.format(time.time(), gc.mem_alloc(), gc.mem_free()))
+            
             # Put the thread to sleep
             time.sleep(self.poll_interval)
         
@@ -482,13 +484,16 @@ class Compressor:
     def run(self):
         if self.thread_safe:
             print("Compressor instance is threadsafe. Starting a background thread.")
-            _thread.start_new_thread(self._run_thread, ())        
+            _thread.start_new_thread(self._run_thread, ())
         else:            
             # Note that no watchdog is created in this case. Unfortunately some of the networking
             # calls aren't 100% async and may block long enough to allow the interrupt to fire
             # This makes running in single threaded mode somewhat suspect
             print("Compressor instance is not threadsafe. Running using coroutines.")
-            self.run_task = asyncio.create_task(self._run())
+            self.run_task = asyncio.create_task(self._run_coroutine())
+            
+        if self.settings.compressor_on_power_up:
+            self.compressor_on()
 
 ####################
 # Network Functions
@@ -658,41 +663,23 @@ class CompressorServer(Server):
 # Main
 
 async def startUI(compressor, settings):
-    # Catch any connection error, since it is non fatal. A connection is desired, but not required
-    try:
-        global server
-        server = CompressorServer(compressor, settings)
-        server.run()
-        # TODO Since run only schedules a coroutine, I doubt that this exception is ever hit
-    except Exception as e:
-        print("Network error. Running without API.")
-        sys.print_exception(e)
-    
-    # Loop forever while the coroutines process
-    #asyncio.get_event_loop().run_forever()
-    while True:
-        await asyncio.sleep(10000)
-
-    print("WARNING: UI co-routines are done.")
+    server = CompressorServer(compressor, settings)
+    server.run()
     
 async def main():
     settings = CompressorSettings(default_settings, thread_safe = use_multiple_threads)
-    
     # Run the compressor no matter what. It is essential that the compressor
     # pressure is monitored
     compressor = Compressor(settings, thread_safe = use_multiple_threads)
     compressor.run()
-    
-    if settings.compressor_on_power_up:
-        compressor.compressor_on(None)
-    
+            
+    # Start any UI coroutines to monitor and update the main thread
     await startUI(compressor, settings)
+    
+    # Loop forever while the coroutines process
+    asyncio.get_event_loop().run_forever()
+    print("WARNING: Foreground coroutines are done.")
 
-
-# TODO Not sure about the implications of this finally block
-try:
-    asyncio.run(main())
-finally:
-    asyncio.new_event_loop()
-
+# Run main to start configuration
+asyncio.run(main())
 

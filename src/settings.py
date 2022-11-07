@@ -1,5 +1,5 @@
 import ujson
-from emptylock import EmptyLock
+from condlock import CondLock
 
 # Settings manages persistent settings, and attempts to minimize the amount
 # of data that must be written. When settings are persisted they are written
@@ -26,7 +26,7 @@ class Settings:
         self.values = {}
         self.private_keys = ()
         self.persist_path = persist_path
-        self.lock = EmptyLock.create_lock(thread_safe)
+        self.lock = CondLock(thread_safe)
         
         # Create the ValueScale settings
         self.setup_properties(defaults)
