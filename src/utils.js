@@ -1,6 +1,6 @@
 settings = {
     debug: window.location.href.startsWith('file://'),
-    stateQueryInterval: 5000,
+    stateQueryInterval: 1000,
     chartQueryInterval: 5000,
     chartDuration: [ 5*60*1000, 10*60*1000, 20*60*1000 ]
 };
