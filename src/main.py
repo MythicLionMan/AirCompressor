@@ -409,7 +409,6 @@ class Compressor:
         self.activity_log.log_stop()
         self.motor_state = reason
 
-
     def _update(self):
         self._read_ADC()
         
@@ -465,14 +464,25 @@ class Compressor:
             self.request_run_flag = False
             self._run_motor()
 
+    def _clean_up(self):
+        # Make sure the motor isn't still running and the purge valve is closed,
+        # since monitoring is about to stop
+        self.compressor_motor.value(0)
+        self.drain_solenoid.value(0)    
+
     async def _run_coroutine(self):
         print("WARNING: No watchdog timer in single thread mode. This is potentially dangerous.")
 
         self.running = True
-        while self.running:                
-            self._update()
-            self._update_status()
-            await asyncio.sleep(self.poll_interval)
+        try:
+            while self.running:                
+                self._update()
+                self._update_status()
+                await asyncio.sleep(self.poll_interval)
+        finally:
+            self._clean_up()
+            
+        print("WARNING: Background coroutine loop has finished")
         
     def _run_thread(self):
         # Setup a watchdog timer to ensure that the compressor is always updated. If something
@@ -481,16 +491,22 @@ class Compressor:
         watchdog = WDT(timeout=5000)
         self.running = True
         
-        while self.running:
-            watchdog.feed()
-            
-            with self.lock:
-                self._update()
-                self._update_status()
-            
-            if memory_debug:
-                gc.collect()
-                print('{} Allocated = {} free = {}'.format(time.time(), gc.mem_alloc(), gc.mem_free()))
+        try:
+            while self.running:
+                watchdog.feed()
+                
+                with self.lock:
+                    self._update()
+                    self._update_status()
+                
+                if memory_debug:
+                    gc.collect()
+                    print('{} Allocated = {} free = {}'.format(time.time(), gc.mem_alloc(), gc.mem_free()))
+                
+                # Put the thread to sleep
+                time.sleep(self.poll_interval)
+        finally:
+            self._clean_up()
             
             # Put the thread to sleep
             time.sleep(self.poll_interval)
