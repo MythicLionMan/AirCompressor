@@ -227,6 +227,7 @@ class Compressor:
         self.duty_recovery_time = 0      # The time when the motor will have recovered from the last duty cycle violation
         self.tank_sensor_error = False   # The tank pressure sensor has detected an out of range value
         self.line_sensor_error = False   # The line pressure sensor has detected an out of range value
+        self.running = False
         
         # Locate hardware registers
         self.tank_pressure_ADC = machine.ADC(tank_pressure_pin)
@@ -466,7 +467,9 @@ class Compressor:
 
     async def _run_coroutine(self):
         print("WARNING: No watchdog timer in single thread mode. This is potentially dangerous.")
-        while True:                
+
+        self.running = True
+        while self.running:                
             self._update()
             self._update_status()
             await asyncio.sleep(self.poll_interval)
@@ -476,8 +479,9 @@ class Compressor:
         # steals too many cycles the board will be rebooted rather than risk leaving the compressor
         # unattended.
         watchdog = WDT(timeout=5000)
+        self.running = True
         
-        while True:
+        while self.running:
             watchdog.feed()
             
             with self.lock:
@@ -688,8 +692,14 @@ async def main():
     # Start any UI coroutines to monitor and update the main thread
     await startUI(compressor, settings)
     
-    # Loop forever while the coroutines process
-    asyncio.get_event_loop().run_forever()
+    try:
+        # Loop forever while the coroutines process
+        asyncio.get_event_loop().run_forever()
+    finally:
+        # Make sure that any background thread are terminated as well
+        compressor.running = False
+        print('Exception raised. Disabling background threads.')
+        
     print("WARNING: Foreground coroutines are done.")
 
 # Run main to start configuration
