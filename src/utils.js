@@ -2,6 +2,7 @@ settings = {
     debug: window.location.href.startsWith('file://'),
     stateQueryInterval: 1000,
     chartQueryInterval: 5000,
+    chartDomainUpdateInterval: 1000, 
     chartDuration: [ 5*60*1000, 10*60*1000, 20*60*1000 ]
 };
 
@@ -132,7 +133,7 @@ class StateMonitor {
     
     // Begins periodically polling the server for the state of self
     monitor(interval = null) {
-        if (interval === null) { interval = settings.stateQueryInterval; }
+        interval ??= settings.stateQueryInterval;
         
         let t = this;
         if (interval == 0) {
@@ -365,18 +366,39 @@ class ChartMonitor {
         this.configureChart(document.getElementById(chartId).getContext('2d'));
     }
 
-    monitor(chartId, interval = null) {
-        if (interval === null) { interval = settings.chartQueryInterval; }
+    monitor(queryInterval = null, domainUpdateInterval = null) {
+        queryInterval ??= settings.chartQueryInterval;
     
-        if (interval == 0) {
+        if (queryInterval == 0) {
             if (this.monitorId) {
                 clearInterval(this.monitorId);
                 this.monitorId = null;
             }
-        } else if (!settings.debug) {
+        } else if (settings.debug) {
             let t = this;
-            this.monitorId = setInterval(function(){ t.updateChart() }, interval);
-            this.updateChart();
+            this.monitorId = setInterval(function(){ t.appendDemoData() }, queryInterval);
+            this.appendDemoData();        
+        } else {
+            let t = this;
+            this.monitorId = setInterval(function(){ t.fetchChartData() }, queryInterval);
+            this.fetchChartData();
+        }
+
+        domainUpdateInterval ??= settings.chartDomainUpdateInterval;
+
+        if (domainUpdateInterval == 0) {
+            if (this.chartDomainId) {
+                clearInterval(this.chartDomainId);
+                this.chartDomainId = null;
+            }
+        } else {
+            let t = this;
+            this.chartDomainId = setInterval(function(){
+                t.updateDomain();
+                t.chart.update();
+            }, domainUpdateInterval);
+            this.updateDomain();
+            this.chart.update();
         }
     }
 
@@ -504,10 +526,10 @@ class ChartMonitor {
                 parsing: {
                     xAxisKey: 'time'
                 },
-                //animation: {
-                //    duration: settings.chartQueryInterval,
-                //    easing: 'linear'
-                //},
+                animation: {
+                    duration: settings.chartDomainUpdateInterval,
+                    easing: 'linear'
+                },
                 scales: {
                     pressure: {
                         type: 'linear',
@@ -575,11 +597,29 @@ class ChartMonitor {
                 
             }
         });
-
-        this.updateDomain();
     }
 
-    updateChart(chartId) {
+    appendDemoData(demoDuration = 5, demoDatapoints = 5) {
+        const now = Date.now() / 1000;
+        
+        // Generate some fake states
+        let states = Array(demoDatapoints);
+        for (let i = 0; i < states.length; i++) {
+            states[i] = {
+                time: now - demoDuration * i / demoDatapoints,
+                tank_pressure: 110 + Math.random() * 20,
+                line_pressure: 80 + Math.random() * 20,
+                duty: Math.random()
+            };
+        }
+        
+        this.processStateData({
+            time: now,
+            state: states
+        });        
+    }
+    
+    fetchChartData() {
         console.log('Updating chart…');
         let t = this;
         
@@ -633,10 +673,14 @@ class ChartMonitor {
         // Append the new data to the chart
         this.appendStateData(data);
         
-        this.updateDomain(domainEnd, this.chartDuration);
-    
+        // If the chart domain is not being updated automatically, update it with the
+        // chart data
+        if (this.chartDomainId == null) {
+            this.updateDomain(domainEnd, this.chartDuration);
+        }
+        
         // Update the chart to show the new data
-        this.chart.update()
+        this.chart.update('none')
     }
     
     appendStateData(data) {
@@ -761,9 +805,11 @@ class ChartMonitor {
 
     updateDomain(domainEnd = null) {
         if (domainEnd === null) {
-            let now = Date.now();
-            this.chart.options.scales.x.max = now;
-            this.chart.options.scales.x.min = now - this.chartDuration;
+            // Have the chart end in the past, so the gap where new data appears
+            // isn't visible.
+            let domainEnd = Date.now() - settings.chartQueryInterval;
+            this.chart.options.scales.x.max = domainEnd;
+            this.chart.options.scales.x.min = domainEnd - this.chartDuration;
         } else {
             // Calculate when the chart should start
             const domainStart = domainEnd - this.chartDuration;
