@@ -7,10 +7,11 @@ import sys
     
 # Loosly based on https://gist.github.com/aallan/3d45a062f26bc425b22a17ec9c81e3b6
 class Server:
-    def __init__(self, settings, asynchronous):
+    def __init__(self, settings):
         self.settings = settings
-        self.asynchronous = asynchronous
-        self.have_configured_wlan = False        
+        self.server = None
+        self.wlan = None
+        self.status_values = None
         
     def parse_request(self, request_line):
         (request_type, request, protocol) = request_line.decode('ascii').split()
@@ -100,22 +101,42 @@ class Server:
             self.response_header(writer, status = 404, content_type = 'text/html')
             writer.write('<html><head></head><body><h1>Error 404: Document {} not found.</h1></body></html>'.format(path))
 
+    def status_map(self, status):
+        if not self.status_values:
+            self.status_values = {
+                network.STAT_CONNECTING: 'STAT_CONNECTING',
+                network.STAT_CONNECT_FAIL: 'STAT_CONNECT_FAIL',
+                network.STAT_GOT_IP: 'STAT_GOT_IP',
+                network.STAT_IDLE: 'STAT_IDLE',
+                network.STAT_NO_AP_FOUND: 'STAT_NO_AP_FOUND',
+                network.STAT_WRONG_PASSWORD: 'STAT_WRONG_PASSWORD'
+            }
+        return self.status_values.get(status, 'STAT_UNKNOWN')
+    
+    def log_wlan_status(self, message):
+        status = self.wlan.status()
+        status_string = self.status_map(status)
+        
+        print("{} '{}'. {}({})".format(message, self.settings.ssid, status_string, status))
+
     # adapted from https://github.com/micropython/micropython/blob/d9d67adef1113ab18f1bb3c0c6204ccb210a27be/docs/wipy/tutorial/wlan.rst
-    # TODO Settings doesn't have the required properties for static IP setup yet
     async def _configure_and_connect_to_network(self, max_retries):
+        if self.wlan and self.wlan.isconnected():
+            return
+        
         settings = self.settings
         # TODO This should be machine.SOFT_RESET instead of '5' but I can't get the import to work
-        if machine.reset_cause() != 5 and not self.have_configured_wlan:
-            print("Hard reset: Configuring network interface. Reset cause is " + str(machine.reset_cause()))
+        if machine.reset_cause() != 5 and not self.wlan:
+            print("Hard reset: (Re)configuring network interface. Reset cause is " + str(machine.reset_cause()))
             self.wlan = wlan = network.WLAN(network.STA_IF)
             wlan.active(True)
             wlan.config(pm = 0xa11140)  # Disable power-save mode
             
-            # If a static config has been provided use that instead of letting the stack auto configure
-            #if settings.ip != '' and settings.net_mask != '' and settings.gateway != '' and settings.nameserver != '':
+            # TODO If a static config has been provided use that instead of letting the stack auto configure
+            # NOTE Interesting thought: I don't need gateway or nameserver for this application.
+            #if settings.ip and settings.net_mask and settings.gateway and settings.nameserver:
             #    wlan.ifconfig(config=(settings.ip, settings.net_mask, settings.gateway, settings.nameserver))
             self.have_configured_wlan = True
-            await asyncio.sleep(1)
         else:
             wlan = self.wlan
 
@@ -127,64 +148,48 @@ class Server:
                 if wlan.status() < 0 or wlan.status() >= 3:
                     break
                 retries -= 1
-                print('waiting for connection to SSID {}. Current status = {}'.format(settings.ssid, wlan.status()))
+                
+                self.log_wlan_status('Wating for connection to')
                 await asyncio.sleep(1)
+
+            self.log_wlan_status('Connection loop done for')
 
         if not wlan.isconnected():
             raise RuntimeError('network connection failed ' + str(wlan.status()))
         else:
-            print('connected')
-            status = wlan.ifconfig()
-            print('ip = ' + status[0])
-
-    def _run_blocking(self):
-        addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
-
-        s = socket.socket()
-        s.bind(addr)
-        s.listen(1)
-
-        print('listening on', addr)
-
-        # Listen for connections
-        while True:
-            try:
-                print('Waiting for connection.')
-                cl, addr = s.accept()
-                print('client connected from', addr)
-                
-                self.handle_request(cl)
-                print('request completed successfully')
-            finally:
-                cl.close()
-                print('connection closed')
+            print('connected: ip = ' + wlan.ifconfig()[0])
                             
     async def _run(self):
-        while True:
+        self.running = True
+        while self.running:
             try:
                 print('Connecting to Network...')
                 await self._configure_and_connect_to_network(0)
+
+                self.server = await asyncio.start_server(self.serve_client, "0.0.0.0", 80)
                 
-                print('Starting webserver...')
-                if self.asynchronous:
-                    self.server = await asyncio.start_server(self.serve_client, "0.0.0.0", 80)
-                    print('Server has started and is waiting for requests.')
-                else:
-                    self._run_blocking()
-                    print('Webserver is done. Bye bye.')
-            # TODO I sometimes get ENOMEM here. It looks like I'm not releasing sockets properly
-            #      https://forum.micropython.org/viewtopic.php?t=4025
+                print('Server has started and is waiting for requests.')
+                while self.wlan.isconnected():
+                    await asyncio.sleep(2)
+                
+                print('Network has disconnected. Shutting down server for restart.')
+                await self.server.wait_closed()
+                print('Server has shut down.')
             except Exception as e:
-                print('Error in main runloop')
+                print('Error starting server')
                 sys.print_exception(e)
 
-            # Sleep for a while, then try to connect again
-            # TODO Won't this cause the server to try to reconnect even when it is already connected?
-            #      That fails when a new sever is started, because the port is already bound.
-            await asyncio.sleep(self.settings.network_retry_timeout)
+                # Sleep for a while, then try to connect again
+                await asyncio.sleep(self.settings.network_retry_timeout)
 
     def run(self):
         self.run_task = asyncio.create_task(self._run())
+        
+    def stop(self):
+        self.running = False
+        if self.server:
+            self.server.close()
+            self.server = None
 
 # A utility that takes a nested dictinary and returns a copy with
 # all nested keys stored as key paths on the root

@@ -508,9 +508,6 @@ class Compressor:
         finally:
             self._clean_up()
             
-            # Put the thread to sleep
-            time.sleep(self.poll_interval)
-        
         print("WARNING: Background thread event loop has finished")
          
     def run(self):
@@ -533,7 +530,7 @@ class Compressor:
 
 class CompressorServer(Server):
     def __init__(self, compressor, settings):
-        Server.__init__(self, settings, True)
+        Server.__init__(self, settings)
         self.compressor = compressor
         self.root_document = 'status.html'
     
@@ -621,7 +618,7 @@ class CompressorServer(Server):
                     # to False. But this will require the buffer to hold all of the data that is being sent,
                     # so it is a memory consumption risk.
                     writer.write('{"time":' + str(time.time()) + ',"maxDuration":' + str(compressor.state_log.max_duration) + ',"state":[')
-                    await compressor.state_log.dump(writer, int(parameters.get('since', 0)), blocking = compressor.thread_safe)
+                    await compressor.state_log.dump(writer, int(parameters.get('since', 0)), blocking = not compressor.thread_safe)
                     writer.write(']}')
                 elif endpoint == '/on':
                     shutdown_time = parameters.get("shutdown_in", None)
@@ -679,18 +676,6 @@ class CompressorServer(Server):
             await writer.drain()
             await writer.wait_closed()
                 
-    def handle_request(self, cl):
-        rawBytes = b''
-        while rawBytes.find(b'\r\n') < 0:
-            rawBytes = rawBytes + cl.recv(128)
-
-        lines = rawBytes.split(b'\r\n')
-        if len(lines) > 0:
-            self._parse_request(lines[0])
-        
-        cl.send('HTTP/1.0 200 OK\r\nContent-type: text/html\r\n\r\n')
-        cl.send('<html><head></head><body><h1>Response</h1></body></html>')
-
 #######################
 # Main
 
