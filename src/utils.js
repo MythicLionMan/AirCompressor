@@ -2,6 +2,8 @@ settings = {
     debug: window.location.href.startsWith('file://'),
     stateQueryInterval: 1000,
     chartQueryInterval: 5000,
+    stateFetchLateInterval: 500,        // If a query takes longer than this to return, a warning is posted
+    fetchRecoveryInterval: 10000,       // When a fetch is issued, sending another query is blocked until it returns or this time has elapsed
     chartDomainUpdateInterval: 1000, 
     chartDuration: [ 5*60*1000, 10*60*1000, 20*60*1000 ]
 };
@@ -121,11 +123,42 @@ class CompressorActions {
     }    
 }
 
+// This lock can be used to block sending a new fetch request while one is still outsanding.
+// After recovery time has elapsed the lock will open up regardless, so that a new
+// request can be made.
+class FetchLock {
+    constructor(recovery) {
+        this.recovery = recovery;
+    }
+    
+    // Returns true if a new fetch can be scheduled, false if there is an outstanding
+    // fetch that hasn't timed out yet. If this is unlocked it will be locked after the
+    // call.
+    isLocked() {
+        if (this.fetchPending) {
+            // The last fetch is still pending, so don't start a new one
+            return false;
+        }
+        let t = this;
+        this.fetchPending = setTimeout(() => t.unlock(), this.recovery);
+    }
+    
+    // Clears the pending lock and allows another fetch to proceed. Call this when
+    // a fetch returns to unlock immediately. If it isn't called explicitly it will
+    // eventually time out and the block will reset.
+    unlock() {
+        if (this.fetchPending) {
+            clearTimeout(this.fetchPending);
+            this.fetchPending = null;
+        }
+    }
+}
+
 class StateMonitor {
     constructor(lastUpdateTimeId) {
         this.monitorId = null;
         this.server_time_offset = null;
-        this.fetchPending = false;
+        this.fetchPending = new FetchLock(settings.fetchRecoveryInterval);
         
         this.lastUpdateTimeElement = lastUpdateTimeId ? document.getElementById(lastUpdateTimeId) : null;
         this.stateElements = Array.from(document.getElementsByClassName('undefined_state'));
@@ -142,10 +175,10 @@ class StateMonitor {
                 this.monitorId = null;
             }
         } else if (settings.debug) {
-            this.monitorId = setInterval(function(){t.applyDebugState();}, interval);
+            this.monitorId = setInterval(() => t.applyDebugState(), interval);
             this.applyDebugState();
         } else {
-            this.monitorId = setInterval(function(){t.fetchState();}, interval);
+            this.monitorId = setInterval(() => t.fetchState(), interval);
             this.fetchState();
         }
     }
@@ -308,10 +341,14 @@ class StateMonitor {
 
     // Initiates a fetch and handles the result
     fetchState() {
-        //if (this.fetchPending) return;
-        this.fetchPending = true;
+        if (this.fetchPending.isLocked()) {
+            // The last fetch is still pending, so don't start a new one
+            return;
+        }
         let t = this;
-        
+        // Show an alert if we don't hear from this fetch in a timely fashion
+        this.fetchLate = setTimeout(() => t.fetchLateHandler(), settings.stateFetchLateInterval);
+                
         // Query the server
         fetch('/status', {
            method: 'GET', 
@@ -322,10 +359,21 @@ class StateMonitor {
         .then((response) => response.json())
         .then((data) => t.handleFetchStateResponse(data))
         .catch((error) => t.handleFetchStateError(error))
-        .finally(() => { t.fetchPending = false; });
+        .finally(() => t.fetchPending.unlock());
+    }
+    
+    fetchLateHandler() {
+        this.fetchLate = null;
+        this.handleFetchStateError('State fetch overdue.');
     }
     
     handleFetchStateResponse(data) {
+        // Cancel any pending fetchLate watchdog
+        if (this.fetchLate) {
+            clearTimeout(this.fetchLate);
+            this.fetchLate = null;
+        }
+        
         this.removeStateClass('compressor_error');
         
         // Update the time when the last succesful update was received
@@ -339,8 +387,7 @@ class StateMonitor {
     }
     
     handleFetchStateError(error) {
-        console.error('Communication Error:', error);
-
+        console.error('Communication Error: ', error);
         this.addStateClass('compressor_error');
     }
 }
@@ -357,8 +404,8 @@ class ChartMonitor {
         this.activitiesVisible = true;
         this.commandsVisible = true;
 
-        this.stateFetchPending = false;
-        this.activityFetchPending = false;
+        this.stateFetchPending = new FetchLock(settings.fetchRecoveryInterval);
+        this.activityFetchPending = new FetchLock(settings.fetchRecoveryInterval);
         
         this.setChartDurationIndex(0);
 
@@ -376,11 +423,11 @@ class ChartMonitor {
             }
         } else if (settings.debug) {
             let t = this;
-            this.monitorId = setInterval(function(){ t.appendDemoData() }, queryInterval);
+            this.monitorId = setInterval(() => t.appendDemoData(), queryInterval);
             this.appendDemoData();        
         } else {
             let t = this;
-            this.monitorId = setInterval(function(){ t.fetchChartData() }, queryInterval);
+            this.monitorId = setInterval(() => t.fetchChartData(), queryInterval);
             this.fetchChartData();
         }
 
@@ -393,7 +440,7 @@ class ChartMonitor {
             }
         } else {
             let t = this;
-            this.chartDomainId = setInterval(function(){
+            this.chartDomainId = setInterval(() => {
                 t.updateDomain();
                 t.chart.update();
             }, domainUpdateInterval);
@@ -623,9 +670,7 @@ class ChartMonitor {
         console.log('Updating chart…');
         let t = this;
         
-        if (true || !this.stateFetchPending) {
-            this.stateFetchPending = true;
-            
+        if (!this.stateFetchPending.isLocked()) {
             // Query the server for state logs that are after the last state
             // query that we made
             fetch('/state_logs?since=' + this.last_state_update.toString(), {
@@ -635,16 +680,14 @@ class ChartMonitor {
                }
             })
             .then((response) => response.json())
-            .then((data) => { t.processStateData(data); })
-            .catch((error) => { console.error('Communication Error Fetching State:', error); })
-            .finally(() => { t.stateFetchPending = false; });
+            .then((data) => t.processStateData(data))
+            .catch((error) => console.error('Communication Error Fetching State:', error))
+            .finally(() => t.stateFetchPending.unlock());
         }
         
         // Query the server for activity logs that end after the last 
         // update that we received.
-        if (true || !this.activityFetchPending) {
-            this.activityFetchPending = true;
-                
+        if (!this.activityFetchPending.isLocked()) {
             fetch('/activity_logs?since=' + this.last_activity_update.toString(), {
                method: 'GET', 
                headers: {
@@ -652,9 +695,9 @@ class ChartMonitor {
                }
             })
             .then((response) => response.json())
-            .then((data) => { t.processActivity(data); })
-            .catch((error) => { console.error('Communication Error Fetching Activity:', error); })
-            .finally(() => { t.activityFetchPending = false; });
+            .then((data) => t.processActivity(data))
+            .catch((error) => console.error('Communication Error Fetching Activity:', error))
+            .finally(() => t.activityFetchPending.unlock());
         }
     }
 
