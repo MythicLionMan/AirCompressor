@@ -8,6 +8,11 @@ from ringlog import RingLog
 from condlock import CondLock
 from heartbeatmonitor import HeartbeatMonitor
 
+import compressorlogs
+from compressorlogs import EventLog
+from compressorlogs import CommandLog
+from compressorlogs import StateLog
+
 import ujson
 import time
 import sys
@@ -71,112 +76,7 @@ compressor_active_status_pin = const(2)
 purge_active_status_pin = const(3)
 use_multiple_threads = True
 debug_mode = False
-
-####################
-# Logging Functions
-
-EVENT_RUN=const(b'R')
-EVENT_PURGE=const(b'P')
-
-class EventLog(RingLog):
-    def __init__(self, thread_safe = True):
-        RingLog.__init__(self, "LLs", ["start", "stop", "event"], 40, thread_safe = thread_safe)
-        self.console_log = False
-        self.activity_open = False
-            
-    # Open a new log entry for the start time
-    def log_start(self, event):
-        with self.lock:
-            start = time.time()
-            # TODO Instead of + 1000000 this should just be int max, for the max possible time
-            self.log((start, start + 100000000, event))
-            self.activity_open = True
-        
-    # Update the current log entry with the current time
-    def log_stop(self):
-        with self.lock:
-            if self.activity_open:
-                # Grab the most recent log (for the open activity)
-                current_log = self[0]
-                
-                # Extract the log properties
-                event = current_log[2]
-                start = current_log[0]
-                
-                stop = time.time()
-                
-                # Update the log with the current time as the stop time
-                self[0] = (start, stop, event)
-                self.activity_open = False
-            
-    def calculate_duty(self, duration):
-        now = time.time()
-        # Clamp the start of the sample window to 0
-        if now > duration:
-            query_start = now - duration
-        else:
-            query_start = now
-        
-        # Find the total time that the compressor was running in the window (query_start - now)
-        with self.lock:            
-            total_runtime = 0
-            for i in range(len(self)):
-                log = self[i]
-                event = log[2]
-                # Logs that are 'open' will have a stop time in the distant future. Logs that
-                # end within the interval may have started before it began. Clamp the stop and
-                # stop times to the query window.
-                start = max(query_start, log[0])
-                stop = min(now, log[1])
-                #print("calculate_duty have log: start = %d stop = %d" % (start, stop))
-                # Count the time for this event if this is a run event in the window from
-                # (query_start - now). Since the start and stop times of the log have been
-                # clamped to the query window this can be tested by checking to see if the
-                # clamped interval is not empty.
-                if event == EVENT_RUN and stop > start:
-                    total_runtime += stop - start
-            
-            duty = total_runtime/duration
-        
-            # For debugging the duty calculations can be logged
-            #print("Compressor has run for %d of the last %d seconds. Duty cycle is %f%%" % (total_runtime, duration, duty*100))
-            
-            # Return the percentage of the sample window where the compressor was running
-            return duty
-    
-COMMAND_ON=const(b'O')
-COMMAND_OFF=const(b'F')
-COMMAND_RUN=const(b'R')
-COMMAND_PAUSE=const(b'|')
-COMMAND_PURGE=const(b'P')
-
-class CommandLog(RingLog):
-    def __init__(self, thread_safe):
-        RingLog.__init__(self, "Ls", ["time", "command"], 10, thread_safe = thread_safe)
-        self.console_log = False
-
-    def log_command(self, event):
-        self.log((time.time(), event))
-
-class StateLog(RingLog):
-    def __init__(self, settings, thread_safe):
-        RingLog.__init__(self, "Lfff3s", ["time", "tank_pressure", "line_pressure", "duty", "state"], 200, thread_safe = thread_safe)
-        self.last_log_time = 0
-        self.settings = settings
-        self.console_log = False
-    
-    def log_state(self, tank_pressure, line_pressure, duty, state):
-        now = int(time.time())
-        since_last = now - self.last_log_time
-        #print("now = " + str(now) + " since last " + str(since_last) + " Interval " + str(self.settings.log_interval))
-        if since_last > self.settings.log_interval:
-            self.last_log_time = now
-            self.log((now, tank_pressure, line_pressure, duty, state))
-            
-    @property
-    def max_duration(self):
-        return self.settings.log_interval * self.size_limit
-            
+      
 ######################
 # Compressor Functions
 #
@@ -325,7 +225,7 @@ class Compressor:
     def request_run(self):
         with self.lock:
             self.request_run_flag = True
-            self.command_log.log_command(COMMAND_RUN)
+            self.command_log.log_command(compressorlogs.COMMAND_RUN)
     
     # Enables the on state. The motor will be automatically turned on and off
     # as needed based on the settings
@@ -335,7 +235,7 @@ class Compressor:
                 shutdown_in = self.settings.auto_stop_time
                 
             if not self.compressor_is_on:
-                self.command_log.log_command(COMMAND_ON)
+                self.command_log.log_command(compressorlogs.COMMAND_ON)
                 self.compressor_is_on = True
 
                 # If the shutdown parameter is > 0, schedule the shutdown relative to now
@@ -351,7 +251,7 @@ class Compressor:
             # If it was active before the call then
             # trigger any stop actions
             if self.compressor_is_on:
-                self.command_log.log_command(COMMAND_OFF)            
+                self.command_log.log_command(compressorlogs.COMMAND_OFF)            
                 # Clear the active flag and the shutdown time
                 self.compressor_is_on = False
                 self.shutdown_time = 0
@@ -359,7 +259,7 @@ class Compressor:
                 self.purge()
 
     def purge(self, duration = None, delay = None):
-        self.command_log.log_command(COMMAND_PURGE)
+        self.command_log.log_command(compressorlogs.COMMAND_PURGE)
         self.purge_task = asyncio.create_task(self._purge(duration, delay))
 
     # NOTE: Unlike most private Compressor methods, this runs as a coroutine
@@ -381,7 +281,7 @@ class Compressor:
                 
                 # Open the drain solenoid
                 self.drain_solenoid.value(1)            
-                self.activity_log.log_start(EVENT_PURGE)
+                self.activity_log.log_start(compressorlogs.EVENT_PURGE)
                 self.purge_pending = False
                 self.purge_valve_open = True
             
@@ -397,11 +297,11 @@ class Compressor:
         
         if self.motor_state != MOTOR_STATE_RUN:
             self.motor_state = MOTOR_STATE_RUN
-            self.activity_log.log_start(EVENT_RUN)
+            self.activity_log.log_start(compressorlogs.EVENT_RUN)
 
     def pause(self):
         with self.lock:
-            self.command_log.log_command(COMMAND_PAUSE)
+            self.command_log.log_command(compressorlogs.COMMAND_PAUSE)
             self._pause(MOTOR_STATE_PAUSE)
         
     def _pause(self, reason):
