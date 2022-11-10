@@ -1,8 +1,9 @@
 from settings import Settings
 from settings import ValueScale
 from heartbeatmonitor import HeartbeatMonitor
-from compressor_controller import CompressorController
-from compressor_server import CompressorServer
+import compressor_controller
+import compressor_server
+import led_controller
 
 import time
 import sys
@@ -55,11 +56,17 @@ class CompressorSettings(Settings):
         
         self.tank_pressure_pin = 0
         self.line_pressure_pin = 1
+        
         self.compressor_motor_pin = 15
         self.drain_solenoid_pin = 14
-        self.compressor_motor_status_pin = "LED"
-        self.compressor_active_status_pin = 2
-        self.purge_active_status_pin = 3
+        
+        self.status_poll_interval = 250
+        self.compressor_on_status_pin = "LED"
+        self.compressor_on_status_pin2 = None
+        self.error_status_pin = 4
+        self.compressor_motor_status_pin = 2
+        self.purge_status_pin = 3
+        
         self.use_multiple_threads = True
         self.debug_mode = False
 
@@ -67,17 +74,19 @@ class CompressorSettings(Settings):
         self.private_keys = ('wlan_password')
         self.values['tank_pressure_sensor'] = ValueScale(defaults['tank_pressure_sensor'])
         self.values['line_pressure_sensor'] = ValueScale(defaults['line_pressure_sensor'])
-
+            
 async def main():
     settings = CompressorSettings(default_settings)
     # Run the compressor no matter what. It is essential that the compressor
     # pressure is monitored
-    compressor = CompressorController(settings, thread_safe = settings.use_multiple_threads)
+    compressor = compressor_controller.CompressorController(settings, thread_safe = settings.use_multiple_threads)
     compressor.run()
             
     # Start any UI coroutines to monitor and update the main thread
-    server = CompressorServer(compressor, settings)
+    server = compressor_server.CompressorServer(compressor, settings)
     server.run()
+    status = led_controller.LEDController(compressor, settings)
+    status.run()
     
     if settings.debug_mode:
         h = HeartbeatMonitor("coroutines", histogram_bin_width = 5)
@@ -87,9 +96,10 @@ async def main():
         # Loop forever while the coroutines process
         asyncio.get_event_loop().run_forever()
     finally:
-        # Make sure that any background thread are terminated as well
-        compressor.running = False
+        # Make sure that any background threads are terminated as well
+        compressor.stop()
         server.stop()
+        status.stop()
         print('Exception raised. Disabling background threads.')
         
     print("WARNING: Foreground coroutines are done.")

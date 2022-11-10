@@ -71,25 +71,10 @@ class CompressorController:
         self.line_pressure_ADC = machine.ADC(settings.line_pressure_pin)        
         self.compressor_motor = Pin(settings.compressor_motor_pin, Pin.OUT)
         self.drain_solenoid = Pin(settings.drain_solenoid_pin, Pin.OUT)
-        self.motor_status = machine.Pin(settings.compressor_motor_status_pin, machine.Pin.OUT)
-        self.compressor_on_status = machine.Pin(settings.compressor_active_status_pin, machine.Pin.OUT)
-        self.purge_status = machine.Pin(settings.purge_active_status_pin, machine.Pin.OUT)
 
         # Ensure motor is stopped, solenoids closed
         self.compressor_motor.value(0)
         self.drain_solenoid.value(0)
-        
-        # Set the initial status values
-        self._update_status()
-
-    def _update_status(self):
-        # TODO For reasons that I cannot fathom, updating the LED from a thread
-        #      is causing the thread to deadlock. I can disable this for now.
-        #      I was intending to move this code to the UI update thread anyhow
-        if not self.thread_safe:
-            self.motor_status.value(self.compressor_motor.value())
-        self.compressor_on_status.value(self.compressor_is_on)
-        self.purge_status.value(self.drain_solenoid.value())
     
     def _read_ADC(self):
         self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())        
@@ -105,7 +90,7 @@ class CompressorController:
             self.line_pressure = -1
     
     @property
-    def _state(self):
+    def _state_string(self):
         if self.motor_state == MOTOR_STATE_RUN:
             short_state = 'R'
         elif self.motor_state == MOTOR_STATE_OFF:
@@ -132,6 +117,7 @@ class CompressorController:
             
             tank_pressure = self.tank_pressure
             line_pressure = self.line_pressure
+            line_sensor_error = self.line_sensor_error
             
             with self.settings.lock:
                 start_pressure = self.settings.start_pressure
@@ -143,10 +129,10 @@ class CompressorController:
                 "tank_pressure": tank_pressure,
                 "line_pressure": line_pressure,
                 "tank_underpressure": tank_pressure < start_pressure,
-                "line_underpressure": line_pressure < min_line_pressure or
-                                      tank_pressure < min_line_pressure,
+                "line_underpressure": (tank_pressure < min_line_pressure) if line_sensor_error else\
+                                      line_pressure < min_line_pressure,
                 "tank_sensor_error": self.tank_sensor_error,
-                "line_sensor_error": self.line_sensor_error,
+                "line_sensor_error": line_sensor_error,
                 "compressor_on": self.compressor_is_on,
                 "motor_state": self.motor_state,
                 "run_request": self.request_run_flag,
@@ -155,9 +141,11 @@ class CompressorController:
                 "shutdown": self.shutdown_time,
                 "duty_recovery_time": self.duty_recovery_time,
                 "duty": self.activity_log.calculate_duty(duty_duration),
+                # TODO Maybe this should be runtime in the last 60 minutes, since
+                #      that's the question it would be answering
                 "duty_60": self.activity_log.calculate_duty(60*60)
             }        
-    
+        
     # The next time the compressor is updated it will start to run if it can
     def request_run(self):
         with self.lock:
@@ -259,7 +247,7 @@ class CompressorController:
         else:
             current_duty = 0
 
-        self.state_log.log_state(current_pressure, self.line_pressure, current_duty, self._state)
+        self.state_log.log_state(current_pressure, self.line_pressure, current_duty, self._state_string)
                     
         # If the auto shutdown time has arrived schedule a shtudown task
         if self.shutdown_time > 0 and current_time > self.shutdown_time and self.compressor_is_on:
@@ -314,7 +302,6 @@ class CompressorController:
         try:
             while self.running:                
                 self._update()
-                self._update_status()
                 await asyncio.sleep(self.poll_interval)
         finally:
             self._clean_up()
@@ -338,7 +325,6 @@ class CompressorController:
                 
                 with self.lock:
                     self._update()
-                    self._update_status()
                                 
                 # Put the thread to sleep
                 time.sleep(self.poll_interval)
@@ -360,3 +346,10 @@ class CompressorController:
             
         if self.settings.compressor_on_power_up:
             self.compressor_on()
+            
+    def stop(self):
+        self.running = False;
+        # Clean up is called automatically when threads are aborted, but when
+        # running coroutines it may be missed, so an explicity clean up will
+        # ensure that the pins are set to low.
+        self._clean_up()
