@@ -6,12 +6,12 @@ from server import Server
 from server import flatten_dict
 from ringlog import RingLog
 from condlock import CondLock
+from heartbeatmonitor import HeartbeatMonitor
 
 import ujson
 import time
 import sys
 import _thread
-import gc
 
 from machine import Pin
 from machine import WDT
@@ -70,7 +70,7 @@ compressor_motor_status_pin = const("LED")
 compressor_active_status_pin = const(2)
 purge_active_status_pin = const(3)
 use_multiple_threads = True
-memory_debug = False
+debug_mode = False
 
 ####################
 # Logging Functions
@@ -490,19 +490,19 @@ class Compressor:
         # unattended.
         watchdog = WDT(timeout=5000)
         self.running = True
+        if debug_mode:
+            h = HeartbeatMonitor('compressorLoop', self.poll_interval, memory_debug = True, histogram_bin_width = 5)
         
         try:
             while self.running:
                 watchdog.feed()
+                if debug_mode:
+                    h.update()
                 
                 with self.lock:
                     self._update()
                     self._update_status()
-                
-                if memory_debug:
-                    gc.collect()
-                    print('{} Allocated = {} free = {}'.format(time.time(), gc.mem_alloc(), gc.mem_free()))
-                
+                                
                 # Put the thread to sleep
                 time.sleep(self.poll_interval)
         finally:
@@ -679,10 +679,6 @@ class CompressorServer(Server):
 #######################
 # Main
 
-async def startUI(compressor, settings):
-    server = CompressorServer(compressor, settings)
-    server.run()
-    
 async def main():
     settings = CompressorSettings(default_settings, thread_safe = use_multiple_threads)
     # Run the compressor no matter what. It is essential that the compressor
@@ -691,7 +687,12 @@ async def main():
     compressor.run()
             
     # Start any UI coroutines to monitor and update the main thread
-    await startUI(compressor, settings)
+    server = CompressorServer(compressor, settings)
+    server.run()
+    
+    if debug_mode:
+        h = HeartbeatMonitor("coroutines", histogram_bin_width = 5)
+        h.monitor_coroutines()
     
     try:
         # Loop forever while the coroutines process
@@ -699,6 +700,7 @@ async def main():
     finally:
         # Make sure that any background thread are terminated as well
         compressor.running = False
+        server.stop()
         print('Exception raised. Disabling background threads.')
         
     print("WARNING: Foreground coroutines are done.")
