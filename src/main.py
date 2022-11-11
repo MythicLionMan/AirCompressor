@@ -3,7 +3,7 @@ from settings import ValueScale
 from heartbeatmonitor import HeartbeatMonitor
 import compressor_controller
 import compressor_server
-import led_controller
+import compressor_ui
 
 import time
 import sys
@@ -87,9 +87,9 @@ async def main():
     # Start any UI coroutines to monitor and update the main thread
     server = compressor_server.CompressorServer(compressor, settings)
     server.run()
-    status = led_controller.LEDController(compressor, settings)
+    status = compressor_ui.LEDController(compressor, settings)
     status.run()
-    pins = led_controller.CompressorPinMonitor(compressor, settings)
+    pins = compressor_ui.CompressorPinMonitor(compressor, settings)
     pins.run()
     
     if settings.debug_mode:
