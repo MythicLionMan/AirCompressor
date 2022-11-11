@@ -37,6 +37,18 @@ class EventLog(RingLog):
                 self[0] = (start, stop, event)
                 self.activity_open = False
             
+    def map_value_for_dump(self, name, value):
+        if name == 'stop':
+            # The stop field will be in the future for open logs. This will be
+            # updated when the final update for the log is received. But the log
+            # will be unterminated on the client if the connection is broken. To
+            # prevent this from happening, clamp the stop time to the current time
+            # when sending the logs.
+            return min(value, time.time())
+        
+        # All other types should forward to super
+        return super().map_value_for_dump(name, value)
+
     def calculate_duty(self, duration):
         now = time.time()
         # Clamp the start of the sample window to 0

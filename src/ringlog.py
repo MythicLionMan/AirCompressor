@@ -29,6 +29,15 @@ class RingLog:
 
             # Assign the tuple to the most recent slot
             self[0] = log_tuple
+            
+    def map_value_for_dump(self, name, value):
+        # If value is a binary string its string representation will not be
+        # valid json (it will be represented as b'value'). Other types will
+        # decode properly when mapped to a string
+        if isinstance(value, bytes):
+            return '"' + value.decode() + '"'
+
+        return value
                 
     # Outputs all entries in the log as json pairs without having to allocate one big string
     # NOTE If the blocking parameter is false, then the writer will not be drained. The caller
@@ -63,17 +72,8 @@ class RingLog:
                         if not first_field:
                             writer.write(",")
                         first_field = False
-                        
-                        # Value may be a binary string. If it is it's string representation
-                        # will not be valid json (it will be represented as b'value'). Try
-                        # to decode it, and if that fails asume that it's a type with a valid
-                        # conversion.
-                        try:
-                            value = '"' + value.decode() + '"'
-                        except:
-                            pass
-                        
-                        writer.write('"' + field + '":' + str(value))
+                                                
+                        writer.write('"' + field + '":' + str(self.map_value_for_dump(field, value)))
                     writer.write("}")
                     if blocking:
                         await writer.drain()
