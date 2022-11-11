@@ -46,7 +46,16 @@ default_settings = {
         "value_max": 150,
         "sensor_min": 0,
         "sensor_max": 65535
-    }
+    },
+    
+    # Setting this to False will permanently de-activate the server for debugging
+    # The following command can be used as a 'poison pill' to prevent the server
+    # from booting up and taking control of the device when debugging:
+    #
+    #    curl "http://192.168.50.227/settings?activated=false"
+    #
+    # Restore control by manually editing 'settings.json' to remove the key.
+    "activated": True
 }
 
 class CompressorSettings(Settings):
@@ -79,6 +88,10 @@ class CompressorSettings(Settings):
          
 async def main():
     settings = CompressorSettings(default_settings)
+    if not settings.activated:
+        print('Settings has deactivated client. Aborting.')
+        return
+        
     # Run the compressor no matter what. It is essential that the compressor
     # pressure is monitored
     compressor = compressor_controller.CompressorController(settings, thread_safe = settings.use_multiple_threads)

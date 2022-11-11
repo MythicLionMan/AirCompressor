@@ -112,6 +112,8 @@ class Settings:
                             self.values[key] = int(new_value)
                         elif isinstance(current_value, str):
                             self.values[key] = str(new_value)
+                        elif isinstance(current_value, bool):
+                            self.values[key] = bool(new_value in ['true', 'True'])
                         else:
                             self.values[key] = new_value
                     else:

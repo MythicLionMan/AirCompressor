@@ -52,11 +52,11 @@ class CompressorServer(Server):
                             self.settings.update(parameters)
                             self.settings.write_delta()
                             
-                            self.return_json(writer, self.settings.public_values_dictioniary)
+                            self.return_json(writer, self.settings.public_values_dictionary)
                         except KeyError as e:
                             self.return_json(writer, {'result':'unknown key error', 'missing key': e}, 400)                    
                     else:
-                        self.return_json(writer, self.settings.public_values_dictioniary)
+                        self.return_json(writer, self.settings.public_values_dictionary)
                 
                 # The rest of the commands only accept 0 - 2 parameters
                 elif len(parameters) > 2:                
