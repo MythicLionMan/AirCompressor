@@ -145,13 +145,21 @@ class CompressorController:
                 #      that's the question it would be answering
                 "duty_60": self.activity_log.calculate_duty(60*60)
             }        
-        
+                
     # The next time the compressor is updated it will start to run if it can
     def request_run(self):
         with self.lock:
             self.request_run_flag = True
             self.command_log.log_command(compressorlogs.COMMAND_RUN)
     
+    # Toggles the on state in a thread safe way
+    def toggle_on_state(self):
+        with self.lock:
+            if self.compressor_is_on:
+                self.compressor_off()
+            else:
+                self.compressor_on()
+                
     # Enables the on state. The motor will be automatically turned on and off
     # as needed based on the settings
     def compressor_on(self, shutdown_in = None):

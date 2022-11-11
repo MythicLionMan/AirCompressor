@@ -1,12 +1,13 @@
 import compressor_controller
+import pin_monitor
 
 import time
 import machine
 import uasyncio as asyncio
 
-# Updates the status leds and monitors the on/off button. The LEDs are configured to
-# mimic those in the web client and apps, but there are some difference due to not having
-# a pin colour and not having to show connection errors.
+# Updates the status leds. The LEDs are configured to mimic those in the web client
+# and apps, but there are some difference due to not having a pin colour and not
+# having to show connection errors.
 #
 # The status led values are:
 #    - compressor_on_status_pin
@@ -95,3 +96,15 @@ class LEDController:
         
     def stop(self):
         self.running = False
+        
+# Monitors pins connected to buttons and handles the responses
+class CompressorPinMonitor(pin_monitor.PinMonitor):
+    def __init__(self, compressor, settings):
+        pin_monitor.PinMonitor.__init__(self, { 'power': settings.power_button_pin })
+        self.compressor = compressor
+        
+    def pin_value_did_change(self, pin_name, new_value):
+        print('Pin {} changed value to {}'.format(pin_name, new_value))
+        
+        if pin_name == 'power' and new_value:
+            self.compressor.toggle_on_state()

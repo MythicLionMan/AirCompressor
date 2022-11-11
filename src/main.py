@@ -54,18 +54,20 @@ class CompressorSettings(Settings):
     def __init__(self, default_settings):
         Settings.__init__(self, default_settings)
         
-        self.tank_pressure_pin = 0
-        self.line_pressure_pin = 1
+        self.tank_pressure_pin = 0   # ADC pin for pressure sensor
+        self.line_pressure_pin = 1   # ADC pin for pressure sensor
         
-        self.compressor_motor_pin = 15
-        self.drain_solenoid_pin = 14
+        self.compressor_motor_pin = 15   # Output for compressor relay
+        self.drain_solenoid_pin = 14     # Output for drain solenoid
         
-        self.status_poll_interval = 250
-        self.compressor_on_status_pin = "LED"
-        self.compressor_on_status_pin2 = None
-        self.error_status_pin = 4
-        self.compressor_motor_status_pin = 2
-        self.purge_status_pin = 3
+        self.status_poll_interval = 250       # Update interval for status LEDs
+        self.compressor_on_status_pin = "LED" # Output for power LED (turns on monitoring)
+        self.compressor_on_status_pin2 = None # Secondary power LED output
+        self.error_status_pin = 4             # Output for error LED
+        self.compressor_motor_status_pin = 2  # Output for compressor motor status LED
+        self.purge_status_pin = 3             # Output for purge solenoid status LED
+        
+        self.power_button_pin = 5             # Input for power button to toggle 'on' state
         
         self.use_multiple_threads = True
         self.debug_mode = False
@@ -74,7 +76,7 @@ class CompressorSettings(Settings):
         self.private_keys = ('wlan_password')
         self.values['tank_pressure_sensor'] = ValueScale(defaults['tank_pressure_sensor'])
         self.values['line_pressure_sensor'] = ValueScale(defaults['line_pressure_sensor'])
-            
+         
 async def main():
     settings = CompressorSettings(default_settings)
     # Run the compressor no matter what. It is essential that the compressor
@@ -87,6 +89,8 @@ async def main():
     server.run()
     status = led_controller.LEDController(compressor, settings)
     status.run()
+    pins = led_controller.CompressorPinMonitor(compressor, settings)
+    pins.run()
     
     if settings.debug_mode:
         h = HeartbeatMonitor("coroutines", histogram_bin_width = 5)
@@ -100,6 +104,7 @@ async def main():
         compressor.stop()
         server.stop()
         status.stop()
+        pins.stop()
         print('Exception raised. Disabling background threads.')
         
     print("WARNING: Foreground coroutines are done.")
