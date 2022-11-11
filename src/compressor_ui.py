@@ -103,8 +103,8 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
         pin_monitor.PinMonitor.__init__(self, { 'power': settings.power_button_pin })
         self.compressor = compressor
         
-    def pin_value_did_change(self, pin_name, new_value):
-        print('Pin {} changed value to {}'.format(pin_name, new_value))
+    def pin_value_did_change(self, pin_name, new_value, previous_duration):
+        print('Pin {} changed value to {} after {} millis at old value'.format(pin_name, new_value, previous_duration))
         
         if pin_name == 'power' and new_value:
             self.compressor.toggle_on_state()

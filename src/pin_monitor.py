@@ -11,38 +11,22 @@ class PinMonitor:
     #          in the dictionary will be configured as inputs. When a pin
     #          changes state its name will be passed to pin_value_did_change
     def __init__(self, pin_ids, pull = machine.Pin.PULL_UP):
-        # Map the pin ids to configured pin instances
-        self.pins = { pin_name: machine.Pin(pin_id, machine.Pin.IN, pull) for (pin_name, pin_id) in pin_ids.items()}
+        self.pin_ids = pin_ids
+        self.pull = pull
         
-    def pin_value_did_change(self, pin_name, new_value):
+    def pin_value_did_change(self, pin_name, new_value, previous_duration):
         pass
     
     async def _run(self, bounce_time, poll_interval):
-        pins = self.pins
-        # Get the initial pin states
-        pin_values = { pin_name: pin.value() for (pin_name, pin) in pins.items() }
-        # Create an array to hold the counter values
-        pin_counters = { pin_name: 0 for pin_name in pins.keys() }
+        # Map the pin ids to configured pin instances
+        pins = { pin_name: PinState(pin_id, self.pull) for (pin_name, pin_id) in self.pin_ids.items()}
         
         self.running = True
         while self.running:
-            for (pin_name, pin) in pins.items():
-                # Read the current state of the pin
-                value = pin.value()
-
-                # If the pin value is different than the stored value increment the counter,
-                # otherwise reset it
-                pin_count = pin_counters[pin_name] + 1 if value != pin_values[pin_name] else 0
-                
-                if pin_count >= bounce_time:
-                    # The pin has been stable at this new value for the bounce interval
-                    # Switch the pin status and call the callback
-                    pin_values[pin_name] = value
-                    pin_counters[pin_name] = 0
-
-                    self.pin_value_did_change(pin_name, value)
-                else:
-                    pin_counters[pin_name] = pin_count
+            for (pin_name, pin_state) in pins.items():
+                value = pin_state.update(bounce_time)
+                if value is not None:
+                    self.pin_value_did_change(pin_name, value[0], value[1])
                  
             await asyncio.sleep_ms(poll_interval)
                 
@@ -51,4 +35,36 @@ class PinMonitor:
         
     def stop(self):
         self.running = False
+        
+class PinState:
+    def __init__(self, pin_id, pull):
+        self.pin = machine.Pin(pin_id, machine.Pin.IN, pull)
+        self.value = self.pin.value()
+        self.counter = 0
+        self.previous_state_change_time = time.ticks_ms()
+        
+    def update(self, bounce_time):
+        # Read the current state of the pin
+        current_value = self.pin.value()
+
+        # If the current value is different than the stored value increment the counter,
+        # otherwise reset it
+        pin_count = self.counter + 1 if current_value != self.value else 0
+        
+        if pin_count >= bounce_time:
+            # The pin has been stable at this new value for the bounce interval
+            # Switch the pin status and call the callback
+            self.value = current_value
+            self.counter = 0
+            
+            now = time.ticks_ms()
+            previous_duration = time.tick_diff(now, self.previous_state_time)
+            self.previous_state_change_time = now
+            
+            return (current_value, previous_duration)
+        else:
+            self.counter = pin_count
+
+        return None
+        
    
