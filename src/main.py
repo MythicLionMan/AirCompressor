@@ -33,6 +33,10 @@ default_settings = {
     "netmask": '',
     "gateway": '',
     "nameserver": '',
+    
+    # UI configuration
+    "button_long_press": 500,          # Duration of a 'long' button press
+    "menu_timeout": 15,                # Timeout before automatically leaving menu and saving
 
     # Sensor configuration
     "tank_pressure_sensor": {

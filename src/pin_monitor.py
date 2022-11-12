@@ -9,9 +9,11 @@ import uasyncio as asyncio
 class PinMonitor:
     # pin_ids: A dictionary that matches pin_names to pin_ids. The pins
     #          in the dictionary will be configured as inputs. When a pin
-    #          changes state its name will be passed to pin_value_did_change
+    #          changes state its name will be passed to pin_value_did_change.
+    #          If any pin_id is None then the pin will not be configured.
     def __init__(self, pin_ids, pull = machine.Pin.PULL_UP):
-        self.pin_ids = pin_ids
+        # Filter out any pins that have no id
+        self.pin_ids = {pin_name:pin_id for pin_name,pin_id in pin_ids.items() if pin_id is not None}
         self.pull = pull
         
     def pin_value_did_change(self, pin_name, new_value, previous_duration):
