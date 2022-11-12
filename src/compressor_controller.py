@@ -160,6 +160,16 @@ class CompressorController:
             else:
                 self.compressor_on()
                 
+    # Toggles the run/pause state in a thread safe way
+    def toggle_run_state(self):
+        with self.lock:
+            if self.request_run_flag:
+                self.request_run_flag = False
+            elif self.motor_state == MOTOR_STATE_RUN:
+                self.pause()
+            else:
+                self.request_run()
+                
     # Enables the on state. The motor will be automatically turned on and off
     # as needed based on the settings
     def compressor_on(self, shutdown_in = None):

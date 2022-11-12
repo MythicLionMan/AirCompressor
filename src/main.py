@@ -77,6 +77,11 @@ class CompressorSettings(Settings):
         self.purge_status_pin = 3             # Output for purge solenoid status LED
         
         self.power_button_pin = 5             # Input for power button to toggle 'on' state
+        self.run_pause_button_pin = 7         # Input for run/pause button to toggle motor state
+        self.purge_button_pin = 8             # Input for purge button pin to activate purge cycle
+        self.menu_button_pin = 9              # Input for menu button pin to select next menu
+        self.value_up_button_pin = 10         # Input for value up button to increment selected value
+        self.value_down_button_pin = 11       # Input for value down button to decrement selected value
         
         self.use_multiple_threads = True
         self.debug_mode = False

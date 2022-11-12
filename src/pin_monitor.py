@@ -17,6 +17,9 @@ class PinMonitor:
     def pin_value_did_change(self, pin_name, new_value, previous_duration):
         pass
     
+    def derived_update(self):
+        pass
+    
     async def _run(self, bounce_time, poll_interval):
         # Map the pin ids to configured pin instances
         pins = { pin_name: PinState(pin_id, self.pull) for (pin_name, pin_id) in self.pin_ids.items()}
@@ -28,6 +31,7 @@ class PinMonitor:
                 if value is not None:
                     self.pin_value_did_change(pin_name, value[0], value[1])
                  
+            self.derived_update()
             await asyncio.sleep_ms(poll_interval)
                 
     def run(self, bounce_time = 20, poll_interval = 1):
@@ -42,6 +46,7 @@ class PinState:
         self.value = self.pin.value()
         self.counter = 0
         self.previous_state_change_time = time.ticks_ms()
+        self.event = asyncio.Event()
         
     def update(self, bounce_time):
         # Read the current state of the pin
@@ -60,6 +65,7 @@ class PinState:
             now = time.ticks_ms()
             previous_duration = time.tick_diff(now, self.previous_state_time)
             self.previous_state_change_time = now
+            self.event.set()
             
             return (current_value, previous_duration)
         else:
