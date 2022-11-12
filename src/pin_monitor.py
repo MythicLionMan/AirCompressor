@@ -22,6 +22,33 @@ class PinMonitor:
     def derived_update(self):
         pass
     
+    # Repeats a function until a pin changes state. The repeat interval will start long
+    # and decrease with each repeat.
+    def repeat_action_until(self, pin_name, action, min_time = 100, max_time = 1000, ramp_ticks = 10):
+        asyncio.create_task(self._repeat_action_until(pin_name, action, min_time, max_time, ramp_ticks))
+        
+    async def _repeat_action_until(self, pin_name, action, min_time, max_time, ramp_ticks):
+        i = 0
+        event = self.pins[pin_name].event
+        time_range = max_time - min_time
+        # A sigmoid function that will be close to 1 when i = 0 and close to 0
+        # when i = ramp_ticks. This will ramp the button interval down smoothly
+        sigmoid = lambda i, ramp_ticks: 0.5 - math.atan((i - ramp_ticks/2)*7.5/ramp_ticks)/math.pi        
+        while True:
+            try:
+                # Fire the action
+                action()
+                
+                delay = int(min_time + time_range * sigmoid(i))
+                i = i + 1
+                # Delay until either the event is triggered or the delay times out
+                await asyncio.await_for_ms(event, delay)
+                # The pin has changed state, so the repeat is over
+                return
+            except asyncio.TimeoutError:
+                # A timeout without a pin state change means the button is still down
+                pass
+    
     async def _run(self, bounce_time, poll_interval):
         # Map the pin ids to configured pin instances
         pins = { pin_name: PinState(pin_id, self.pull) for (pin_name, pin_id) in self.pin_ids.items()}

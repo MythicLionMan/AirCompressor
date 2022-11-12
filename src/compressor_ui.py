@@ -224,23 +224,29 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
                 self.settings.update({ menu['field'] : new_value })
                 print('Updated {} to {}'.format(menu['field'], new_value))
                 self.did_change = True
-        
+            
     def _value_up(self):
         if self.menu_index is None and 'purge' not in self.pins:
             print('No active menu. Requesting purge()')
             self.compressor.purge()
         else:
-            if 'value_down' not in self.pins:
-                # There is no 'value_down' pin, so cycle the value back to min when max is reached
-                def increment_cycle(menu, value):
-                    new_value = value + menu['increment']
-                    return menu['min'] if new_value > menu['max'] else new_value
-                
-                self._update_field(increment_cycle)
-            else:
-                self._update_field(lambda menu, value: min(value + menu['increment'], menu['max']))
-    
+            self.repeat_action_until('value_up', self._increment_menu_value(), self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
+
     def _value_down(self):
+            self.repeat_action_until('value_down', self._decrement_menu_value(), self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
+
+    def _increment_menu_value(self):
+        if 'value_down' not in self.pins:
+            # There is no 'value_down' pin, so cycle the value back to min when max is reached
+            def increment_cycle(menu, value):
+                new_value = value + menu['increment']
+                return menu['min'] if new_value > menu['max'] else new_value
+            
+            self._update_field(increment_cycle)
+        else:
+            self._update_field(lambda menu, value: min(value + menu['increment'], menu['max']))
+            
+    def _decrement_menu_value(self):
         self._update_field(lambda menu, value: max(value - menu['increment'], menu['min']))
     
     @property

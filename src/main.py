@@ -37,7 +37,10 @@ default_settings = {
     # UI configuration
     "button_long_press": 500,          # Duration of a 'long' button press
     "menu_timeout": 15,                # Timeout before automatically leaving menu and saving
-
+    "min_key_repeat": 100,             # Minimum key repeat interval
+    "max_key_repeat": 500,             # Maximum key repeat interval
+    "key_repeat_ticks": 10,            # Number of key repeat ticks to transition from max interval to min
+    
     # Sensor configuration
     "tank_pressure_sensor": {
         "value_min": 0,
