@@ -20,14 +20,13 @@ class PinMonitor:
     def pin_value_did_change(self, pin_name, pin_state, new_value, previous_duration):
         pass
         
-    # Repeats a function until a pin changes state. The repeat interval will start long
+    # Repeats a function until self.current_pin changes state again. The repeat interval will start long
     # and decrease with each repeat.
-    def repeat_action_until(self, pin_state, action, min_time = 100, max_time = 1000, ramp_ticks = 10):
-        asyncio.create_task(self._repeat_action_until(pin_state, action, min_time, max_time, ramp_ticks))
+    def repeat_action_until(self, action, min_time = 100, max_time = 1000, ramp_ticks = 10):
+        asyncio.create_task(self._repeat_action_until(self.current_pin.event, action, min_time, max_time, ramp_ticks))
         
-    async def _repeat_action_until(self, pin_state, action, min_time, max_time, ramp_ticks):
+    async def _repeat_action_until(self, event, action, min_time, max_time, ramp_ticks):
         i = 0
-        event = pin_state.event
         time_range = max_time - min_time
         # A sigmoid function that will be close to 1 when i = 0 and close to 0
         # when i = ramp_ticks. This will ramp the button interval down smoothly
@@ -55,6 +54,7 @@ class PinMonitor:
         while self.running:
             try:
                 for (pin_name, pin_state) in pins.items():
+                    self.current_pin = pin_state
                     value = pin_state.update(bounce_time)
                     if value is not None:
                         self.pin_value_did_change(pin_name, pin_state, value[0], value[1])

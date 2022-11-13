@@ -242,10 +242,10 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
             print('No active menu. Requesting purge()')
             self.compressor.purge()
         else:
-            self.repeat_action_until(pin_state, self._increment_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
+            self.repeat_action_until(self._increment_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
 
     def _value_down(self, pin_state):
-            self.repeat_action_until(pin_state, self._decrement_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
+            self.repeat_action_until(self._decrement_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
 
     def _increment_menu_value(self):
         if 'value_down' not in self.pin_ids:
