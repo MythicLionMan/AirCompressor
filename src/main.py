@@ -77,18 +77,20 @@ class CompressorSettings(Settings):
         self.drain_solenoid_pin = 14     # Output for drain solenoid
         
         self.status_poll_interval = 250       # Update interval for status LEDs
-        self.compressor_on_status_pin = "LED" # Output for power LED (turns on monitoring)
+        self.compressor_on_status_pin = 2     # Output for power LED (turns on monitoring)
         self.compressor_on_status_pin2 = None # Secondary power LED output
-        self.error_status_pin = 4             # Output for error LED
-        self.compressor_motor_status_pin = 2  # Output for compressor motor status LED
+        self.error_status_pin = 5             # Output for error LED
+        self.compressor_motor_status_pin = 4  # Output for compressor motor status LED
         self.purge_status_pin = 3             # Output for purge solenoid status LED
         
-        self.power_button_pin = 5             # Input for power button to toggle 'on' state
-        self.run_pause_button_pin = 7         # Input for run/pause button to toggle motor state
-        self.purge_button_pin = 8             # Input for purge button pin to activate purge cycle
-        self.menu_button_pin = 9              # Input for menu button pin to select next menu
-        self.value_up_button_pin = 10         # Input for value up button to increment selected value
-        self.value_down_button_pin = 11       # Input for value down button to decrement selected value
+        self.pressure_change_increment = 1    # The amount to adjust pressure by when increment/decrement button is pressed
+        self.duty_change_increment = 0.01     # The amount to adjust duty by when increment/decrement button is pushed
+        self.power_button_pin = 10            # Input for power button to toggle 'on' state
+        self.run_pause_button_pin = None      # Input for run/pause button to toggle motor state
+        self.purge_button_pin = None          # Input for purge button pin to activate purge cycle
+        self.menu_button_pin = 11             # Input for menu button pin to select next menu
+        self.value_up_button_pin = 12         # Input for value up button to increment selected value
+        self.value_down_button_pin = 13       # Input for value down button to decrement selected value
         
         self.use_multiple_threads = True
         self.debug_mode = False

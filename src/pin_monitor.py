@@ -1,5 +1,6 @@
 import time
 import sys
+import math
 import machine
 import uasyncio as asyncio
 
@@ -16,7 +17,7 @@ class PinMonitor:
         self.pin_ids = {pin_name:pin_id for pin_name,pin_id in pin_ids.items() if pin_id is not None}
         self.pull = pull
         
-    def pin_value_did_change(self, pin_name, new_value, previous_duration):
+    def pin_value_did_change(self, pin_name, pin_state, new_value, previous_duration):
         pass
     
     def derived_update(self):
@@ -24,12 +25,12 @@ class PinMonitor:
     
     # Repeats a function until a pin changes state. The repeat interval will start long
     # and decrease with each repeat.
-    def repeat_action_until(self, pin_name, action, min_time = 100, max_time = 1000, ramp_ticks = 10):
-        asyncio.create_task(self._repeat_action_until(pin_name, action, min_time, max_time, ramp_ticks))
+    def repeat_action_until(self, pin_state, action, min_time = 100, max_time = 1000, ramp_ticks = 10):
+        asyncio.create_task(self._repeat_action_until(pin_state, action, min_time, max_time, ramp_ticks))
         
-    async def _repeat_action_until(self, pin_name, action, min_time, max_time, ramp_ticks):
+    async def _repeat_action_until(self, pin_state, action, min_time, max_time, ramp_ticks):
         i = 0
-        event = self.pins[pin_name].event
+        event = pin_state.event
         time_range = max_time - min_time
         # A sigmoid function that will be close to 1 when i = 0 and close to 0
         # when i = ramp_ticks. This will ramp the button interval down smoothly
@@ -39,10 +40,10 @@ class PinMonitor:
                 # Fire the action
                 action()
                 
-                delay = int(min_time + time_range * sigmoid(i))
+                delay = int(min_time + time_range * sigmoid(i, ramp_ticks))
                 i = i + 1
                 # Delay until either the event is triggered or the delay times out
-                await asyncio.await_for_ms(event, delay)
+                await asyncio.wait_for_ms(event.wait(), delay)
                 # The pin has changed state, so the repeat is over
                 return
             except asyncio.TimeoutError:
@@ -55,13 +56,17 @@ class PinMonitor:
         
         self.running = True
         while self.running:
-            for (pin_name, pin_state) in pins.items():
-                value = pin_state.update(bounce_time)
-                if value is not None:
-                    self.pin_value_did_change(pin_name, value[0], value[1])
-                 
-            self.derived_update()
-            await asyncio.sleep_ms(poll_interval)
+            try:
+                for (pin_name, pin_state) in pins.items():
+                    value = pin_state.update(bounce_time)
+                    if value is not None:
+                        self.pin_value_did_change(pin_name, pin_state, value[0], value[1])
+                     
+                self.derived_update()
+                await asyncio.sleep_ms(poll_interval)
+            except Exception as e:
+                print("Error processing pin change.")
+                sys.print_exception(e)
                 
     def run(self, bounce_time = 20, poll_interval = 1):
         self.run_task = asyncio.create_task(self._run(bounce_time, poll_interval))
@@ -92,9 +97,10 @@ class PinState:
             self.counter = 0
             
             now = time.ticks_ms()
-            previous_duration = time.tick_diff(now, self.previous_state_time)
+            previous_duration = time.ticks_diff(now, self.previous_state_change_time)
             self.previous_state_change_time = now
             self.event.set()
+            self.event.clear()
             
             return (current_value, previous_duration)
         else:

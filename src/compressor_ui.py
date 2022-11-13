@@ -124,17 +124,17 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
         self.did_change = False
         self.menu_timeout = None
         self.menus = [
-            {'field': 'start_pressure', 'min': 80, 'max': 130, 'increment': 5},
-            {'field': 'stop_pressure', 'min': 80, 'max': 130, 'increment': 5},
-            {'field': 'max_duty', 'min': 0, 'max': 1, 'increment': 0.05},
+            {'field': 'start_pressure', 'min': 80, 'max': 130, 'increment': self.settings.pressure_change_increment},
+            {'field': 'stop_pressure', 'min': 80, 'max': 130, 'increment': self.settings.pressure_change_increment},
+            {'field': 'max_duty', 'min': 0, 'max': 1, 'increment': self.settings.duty_change_increment},
         ]
         
-    def pin_value_did_change(self, pin_name, new_value, previous_duration):
-        print('Pin {} changed value to {} after {} millis at old value'.format(pin_name, new_value, previous_duration))
+    def pin_value_did_change(self, pin_name, pin_state, new_value, previous_duration):
+        #print('Pin {} changed value to {} after {} millis at old value'.format(pin_name, new_value, previous_duration))
         
-        if new_value:
+        if not new_value:
             if pin_name == 'power':
-                asyncio.create_task(self._power_down())
+                asyncio.create_task(self._power_down(pin_state))
             elif pin_name == 'run_pause':
                 print('Toggling run state')
                 self.compressor.toggle_run_state()
@@ -142,26 +142,26 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
                 print('Requesting purge')
                 self.compressor.purge()
             elif pin_name == 'menu':
-                asyncio.create_task(self._next_menu())
+                asyncio.create_task(self._next_menu(pin_state))
             elif pin_name == 'value_up':
-                self._value_up()
+                self._value_up(pin_state)
             elif pin_name == 'value_down':
-                self._value_down()
+                self._value_down(pin_state)
             
-            self._handle_ui_down()
+        self._reset_menu_timeout()
             
     # Starts a timer waiting for any UI button to be pressed.
     # I used to have a neat async version of this, but I couldn't
     # figure out how to wait on multiple events at once, but return
     # when any of them fired.
-    async def _handle_ui_down(self):
+    def _reset_menu_timeout(self):
         self.menu_timeout = time.time() + self.settings.menu_timeout
             
-    async def _power_down(self):
+    async def _power_down(self, pin_state):
         try:
-            await asyncio.await_for_ms(self.pins['power'].event, self.settings.button_long_press)
+            await asyncio.wait_for_ms(pin_state.event.wait(), self.settings.button_long_press)
             # Button was released before timeout. Short press.
-            if 'run_pause' not in self.pins:
+            if 'run_pause' not in self.pin_ids:
                 # There is no dedicated 'run_pause' pin, so toggle the run state
                 print('Short press power button. Toggling run state')
                 self.compressor.toggle_run_state()
@@ -195,9 +195,9 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
             self.settings.write_delta()
             self.did_change = False
 
-    async def _next_menu(self):
+    async def _next_menu(self, pin_state):
         try:
-            await asyncio.await_for_ms(self.pins['menu'].event, self.settings.button_long_press)
+            await asyncio.wait_for_ms(pin_state.event.wait(), self.settings.button_long_press)
             # Button was released before timeout. Short press.
             print('Short press menu button.')
             if self.menu_index == None:
@@ -208,7 +208,7 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
             if self.menu_index >= len(self.menus):
                 self._clear_menu_and_save()
             else:
-                print('Selected menu ' + self.menus[self.menu_index]['field_name'])
+                print('Selected menu ' + self.menus[self.menu_index]['field'])
         except asyncio.TimeoutError:
             # Timeout was reached without the pin changing state again,
             # so the button was held long enough to jump home
@@ -225,18 +225,18 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
                 print('Updated {} to {}'.format(menu['field'], new_value))
                 self.did_change = True
             
-    def _value_up(self):
-        if self.menu_index is None and 'purge' not in self.pins:
+    def _value_up(self, pin_state):
+        if self.menu_index is None and 'purge' not in self.pin_ids:
             print('No active menu. Requesting purge()')
             self.compressor.purge()
         else:
-            self.repeat_action_until('value_up', self._increment_menu_value(), self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
+            self.repeat_action_until(pin_state, self._increment_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
 
-    def _value_down(self):
-            self.repeat_action_until('value_down', self._decrement_menu_value(), self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
+    def _value_down(self, pin_state):
+            self.repeat_action_until(pin_state, self._decrement_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
 
     def _increment_menu_value(self):
-        if 'value_down' not in self.pins:
+        if 'value_down' not in self.pin_ids:
             # There is no 'value_down' pin, so cycle the value back to min when max is reached
             def increment_cycle(menu, value):
                 new_value = value + menu['increment']
@@ -246,8 +246,11 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
         else:
             self._update_field(lambda menu, value: min(value + menu['increment'], menu['max']))
             
+        self._reset_menu_timeout()
+            
     def _decrement_menu_value(self):
         self._update_field(lambda menu, value: max(value - menu['increment'], menu['min']))
+        self._reset_menu_timeout()
     
     @property
     def current_menu(self):

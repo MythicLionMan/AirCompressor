@@ -39,6 +39,10 @@ class Settings:
         with self.lock:
             return self.values[name]
     
+    def __getitem__(self, name):
+        with self.lock:
+            return self.values[name]
+
     @property
     def values_dictionary(self):
         with self.lock:
