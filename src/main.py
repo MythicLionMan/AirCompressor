@@ -2,7 +2,11 @@ from settings import Settings
 from settings import ValueScale
 from heartbeatmonitor import HeartbeatMonitor
 import compressor_controller
-import compressor_server
+try:
+    import compressor_server
+    server_enabled = True
+except ImportError:
+    server_enabled = False
 import compressor_ui
 
 import time
@@ -112,8 +116,9 @@ async def main():
     compressor.run()
             
     # Start any UI coroutines to monitor and update the main thread
-    server = compressor_server.CompressorServer(compressor, settings)
-    server.run()
+    if server_enabled:
+        server = compressor_server.CompressorServer(compressor, settings)
+        server.run()
     status = compressor_ui.LEDController(compressor, settings)
     status.run()
     pins = compressor_ui.CompressorPinMonitor(compressor, settings)
@@ -129,7 +134,8 @@ async def main():
     finally:
         # Make sure that any background threads are terminated as well
         compressor.stop()
-        server.stop()
+        if server_enabled:
+            server.stop()
         status.stop()
         pins.stop()
         print('Exception raised. Disabling background threads.')

@@ -183,7 +183,10 @@ class Server:
                 await asyncio.sleep(self.settings.network_retry_timeout)
 
     def run(self):
-        self.run_task = asyncio.create_task(self._run())
+        if hasattr(network, "WLAN"):
+            self.run_task = asyncio.create_task(self._run())
+        else:
+            print("No WLAN hardware detected. Server unavailable")
         
     def stop(self):
         self.running = False
