@@ -20,10 +20,10 @@ class PinMonitor:
     def pin_value_did_change(self, pin_name, pin_state, new_value, previous_duration):
         pass
         
-    # Repeats a function until self.current_pin changes state again. The repeat interval will start long
+    # Repeats a function until a pin changes state. The repeat interval will start long
     # and decrease with each repeat.
-    def repeat_action_until(self, action, min_time = 100, max_time = 1000, ramp_ticks = 10):
-        asyncio.create_task(self._repeat_action_until(self.current_pin.event, action, min_time, max_time, ramp_ticks))
+    def repeat_action_until(self, pin_name, action, min_time = 100, max_time = 1000, ramp_ticks = 10):
+        asyncio.create_task(self._repeat_action_until(self.pins[pin_name].event, action, min_time, max_time, ramp_ticks))
         
     async def _repeat_action_until(self, event, action, min_time, max_time, ramp_ticks):
         i = 0
@@ -46,18 +46,22 @@ class PinMonitor:
                 # A timeout without a pin state change means the button is still down
                 pass
     
+    # Waits for a pin to change state.
+    async def await_pin(self, pin_name, timeout):
+        await asyncio.wait_for_ms(self.pins[pin_name].event.wait(), timeout)
+    
     async def _run(self, bounce_time, poll_interval):
         # Map the pin ids to configured pin instances
         pins = { pin_name: PinState(pin_id, self.pull) for (pin_name, pin_id) in self.pin_ids.items()}
+        self.pins = pins
         
         self.running = True
         while self.running:
             try:
                 for (pin_name, pin_state) in pins.items():
-                    self.current_pin = pin_state
                     value = pin_state.update(bounce_time)
                     if value is not None:
-                        self.pin_value_did_change(pin_name, pin_state, value[0], value[1])
+                        self.pin_value_did_change(pin_name, value[0], value[1])
                      
                 await asyncio.sleep_ms(poll_interval)
             except Exception as e:

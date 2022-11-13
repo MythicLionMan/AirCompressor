@@ -130,12 +130,12 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
             {'field': 'max_duty', 'min': 0, 'max': 1, 'increment': self.settings.duty_change_increment},
         ]
         
-    def pin_value_did_change(self, pin_name, pin_state, new_value, previous_duration):
+    def pin_value_did_change(self, pin_name, new_value, previous_duration):
         #print('Pin {} changed value to {} after {} millis at old value'.format(pin_name, new_value, previous_duration))
         
         if not new_value:
             if pin_name == 'power':
-                asyncio.create_task(self._power_down(pin_state))
+                asyncio.create_task(self._power_down())
             elif pin_name == 'run_pause':
                 print('Toggling run state')
                 self.compressor.toggle_run_state()
@@ -143,11 +143,11 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
                 print('Requesting purge')
                 self.compressor.purge()
             elif pin_name == 'menu':
-                asyncio.create_task(self._next_menu(pin_state))
+                asyncio.create_task(self._next_menu())
             elif pin_name == 'value_up':
-                self._value_up(pin_state)
+                self._value_up()
             elif pin_name == 'value_down':
-                self._value_down(pin_state)
+                self._value_down()
             
         self._reset_menu_timeout()
             
@@ -176,9 +176,9 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
             print('Menu timeout cancelled')
             pass
         
-    async def _power_down(self, pin_state):
+    async def _power_down(self):
         try:
-            await asyncio.wait_for_ms(pin_state.event.wait(), self.settings.button_long_press)
+            await self.await_pin('power', self.settings.button_long_press)
             # Button was released before timeout. Short press.
             if 'run_pause' not in self.pin_ids:
                 # There is no dedicated 'run_pause' pin, so toggle the run state
@@ -207,9 +207,9 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
             self.settings.write_delta()
             self.did_change = False
 
-    async def _next_menu(self, pin_state):
+    async def _next_menu(self):
         try:
-            await asyncio.wait_for_ms(pin_state.event.wait(), self.settings.button_long_press)
+            await self.await_pin('menu', self.settings.button_long_press)
             # Button was released before timeout. Short press.
             print('Short press menu button.')
             if self.menu_index == None:
@@ -220,7 +220,8 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
             if self.menu_index >= len(self.menus):
                 self._clear_menu_and_save()
             else:
-                print('Selected menu ' + self.menus[self.menu_index]['field'])
+                field = self.menus[self.menu_index]['field']
+                print('Selected menu {} with value {}'.format(field, self.settings[field]))
         except asyncio.TimeoutError:
             # Timeout was reached without the pin changing state again,
             # so the button was held long enough to jump home
@@ -237,15 +238,15 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
                 print('Updated {} to {}'.format(menu['field'], new_value))
                 self.did_change = True
             
-    def _value_up(self, pin_state):
+    def _value_up(self):
         if self.menu_index is None and 'purge' not in self.pin_ids:
             print('No active menu. Requesting purge()')
             self.compressor.purge()
         else:
-            self.repeat_action_until(self._increment_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
+            self.repeat_action_until('value_up', self._increment_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
 
-    def _value_down(self, pin_state):
-            self.repeat_action_until(self._decrement_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
+    def _value_down(self):
+            self.repeat_action_until('value_down', self._decrement_menu_value, self.settings.min_key_repeat, self.settings.max_key_repeat, self.settings.key_repeat_ticks)
 
     def _increment_menu_value(self):
         if 'value_down' not in self.pin_ids:
