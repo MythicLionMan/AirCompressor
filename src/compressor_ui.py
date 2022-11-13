@@ -122,7 +122,8 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
         self.settings = settings
         self.menu_index = None
         self.did_change = False
-        self.menu_timeout = None
+        self.menu_timeout_task = None
+        self.menu_timeout_time = None
         self.menus = [
             {'field': 'start_pressure', 'min': 80, 'max': 130, 'increment': self.settings.pressure_change_increment},
             {'field': 'stop_pressure', 'min': 80, 'max': 130, 'increment': self.settings.pressure_change_increment},
@@ -151,12 +152,30 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
         self._reset_menu_timeout()
             
     # Starts a timer waiting for any UI button to be pressed.
-    # I used to have a neat async version of this, but I couldn't
-    # figure out how to wait on multiple events at once, but return
-    # when any of them fired.
     def _reset_menu_timeout(self):
-        self.menu_timeout = time.time() + self.settings.menu_timeout
+        self.menu_timeout_time = time.time() + self.settings.menu_timeout
+        if self.menu_timeout_task is None:
+            self.menu_timeout_task = asyncio.create_task(self._timeout_menu())
+
+    # Waits for the UI button timeout and then calls _clear_menu_and_save
+    # If canceled it does nothing, because presumably the caller has
+    # performed the cleanup
+    async def _timeout_menu(self):
+        try:
+            while True:
+                remaining_time = self.menu_timeout_time - time.time()
+                if remaining_time >= 0:
+                    await asyncio.sleep(remaining_time)
+                else:
+                    break
             
+            print('Menu timeout')
+            self.menu_timeout_task = None
+            self._clear_menu_and_save()
+        except asyncio.CancelledError:
+            print('Menu timeout cancelled')
+            pass
+        
     async def _power_down(self, pin_state):
         try:
             await asyncio.wait_for_ms(pin_state.event.wait(), self.settings.button_long_press)
@@ -170,21 +189,14 @@ class CompressorPinMonitor(pin_monitor.PinMonitor):
             # so the button was held long enough to trigger a toggle
             print('Long press power button. Toggling on state')
             self.compressor.toggle_on_state()
-            
-    # If the UI button timeout has expried then no button has been
-    # pressed for a while, so reset the menu to the default. If there
-    # are any settings changes to save they will be persisted at this
-    # time.
-    def derived_update(self):
-        if self.menu_timeout and time.time() >= self.menu_timeout:
-            print('Menu timeout')
-            self._clear_menu_and_save()
-            
+                        
     def _clear_menu_and_save(self):
         print('Clearing menu, back to status')
-        # Cancel the timeout until a UI button is pressed again
-        self.menu_timeout = None
-        
+        # Cancel any menu timeout
+        if self.menu_timeout_task:
+            self.menu_timeout_task.cancel()
+            self.menu_timeout_task = None
+            
         # The timeout has elapsed without another UI button being
         # pressed. Reset to the main menu
         self.menu_index = None

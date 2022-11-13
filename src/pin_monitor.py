@@ -19,10 +19,7 @@ class PinMonitor:
         
     def pin_value_did_change(self, pin_name, pin_state, new_value, previous_duration):
         pass
-    
-    def derived_update(self):
-        pass
-    
+        
     # Repeats a function until a pin changes state. The repeat interval will start long
     # and decrease with each repeat.
     def repeat_action_until(self, pin_state, action, min_time = 100, max_time = 1000, ramp_ticks = 10):
@@ -62,7 +59,6 @@ class PinMonitor:
                     if value is not None:
                         self.pin_value_did_change(pin_name, pin_state, value[0], value[1])
                      
-                self.derived_update()
                 await asyncio.sleep_ms(poll_interval)
             except Exception as e:
                 print("Error processing pin change.")
