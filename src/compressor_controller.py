@@ -68,7 +68,10 @@ class CompressorController:
         
         # Locate hardware registers
         self.tank_pressure_ADC = machine.ADC(settings.tank_pressure_pin)
-        self.line_pressure_ADC = machine.ADC(settings.line_pressure_pin)        
+        if settings.line_pressure_pin is not None:
+            self.line_pressure_ADC = machine.ADC(settings.line_pressure_pin)
+        else:
+            self.line_pressure_ADC = None
         self.compressor_motor = Pin(settings.compressor_motor_pin, Pin.OUT)
         self.drain_solenoid = Pin(settings.drain_solenoid_pin, Pin.OUT)
 
@@ -77,18 +80,22 @@ class CompressorController:
         self.drain_solenoid.value(0)
     
     def _read_ADC(self):
-        self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())        
-        self.line_pressure = self.settings.line_pressure_sensor.map(self.line_pressure_ADC.read_u16())
-        
+        self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())
         # If either sensor returns None there is an error. Record the error, and then
         # set the value to -1 so that it is a valid integer for calculations and serialization
         self.tank_sensor_error = self.tank_pressure is None
-        self.line_sensor_error = self.tank_pressure is None
         if self.tank_pressure is None:
             self.tank_pressure = -1
-        if self.line_pressure is None:
-            self.line_pressure = -1
-    
+
+        if self.line_pressure_ADC is not None:
+            self.line_pressure = self.settings.line_pressure_sensor.map(self.line_pressure_ADC.read_u16())
+            self.line_sensor_error = self.line_pressure is None
+            if self.line_pressure is None:
+                self.line_pressure = -1
+        else:
+            self.line_pressure = self.tank_pressure
+            self.line_sensor_error = self.tank_sensor_error
+            
     @property
     def _state_string(self):
         if self.motor_state == MOTOR_STATE_RUN:

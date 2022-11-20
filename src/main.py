@@ -74,8 +74,8 @@ class CompressorSettings(Settings):
     def __init__(self, default_settings):
         Settings.__init__(self, default_settings)
         
-        self.tank_pressure_pin = 0   # ADC pin for pressure sensor
-        self.line_pressure_pin = 1   # ADC pin for pressure sensor
+        self.tank_pressure_pin = 0       # ADC pin for pressure sensor
+        self.line_pressure_pin = None    # ADC pin for pressure sensor
         
         self.compressor_motor_pin = 15   # Output for compressor relay
         self.drain_solenoid_pin = 14     # Output for drain solenoid
