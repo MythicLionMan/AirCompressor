@@ -49,14 +49,14 @@ default_settings = {
     "tank_pressure_sensor": {
         "value_min": 0,
         "value_max": 150,
-        "sensor_min": 0,
-        "sensor_max": 65535
+        "sensor_min": 6554,            # 0.5V from sensor scaled to 0.33V for Pico (10%)
+        "sensor_max": 58981            # 4.5V from sensor scaled to 2.97V for Pico (90%)
     },
     "line_pressure_sensor": {
         "value_min": 0,
         "value_max": 150,
-        "sensor_min": 0,
-        "sensor_max": 65535
+        "sensor_min": 6554,            # 0.5V from sensor scaled to 0.33V for Pico (10%)
+        "sensor_max": 58981            # 4.5V from sensor scaled to 2.97V for Pico (90%)
     },
     
     # Setting this to False will permanently de-activate the server for debugging
