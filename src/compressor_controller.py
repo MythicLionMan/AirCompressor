@@ -278,7 +278,13 @@ class CompressorController:
         if self.shutdown_time > 0 and current_time > self.shutdown_time and self.compressor_is_on:
             self.compressor_off()
 
+        # If the pressure limit has been reached turn off request_run,
+        # even if the compressor has not run.
+        if current_pressure > self.settings.stop_pressure:
+            self.request_run_flag = False
+
         if not self.compressor_is_on:
+            self.request_run_flag = False
             self._pause(MOTOR_STATE_OFF)
             return
         if self.purge_valve_open or self.purge_pending:
