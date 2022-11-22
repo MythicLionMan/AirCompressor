@@ -1,5 +1,6 @@
 from settings import Settings
 from settings import ValueScale
+import debug
 from heartbeatmonitor import HeartbeatMonitor
 import compressor_controller
 try:
@@ -81,8 +82,8 @@ class CompressorSettings(Settings):
         self.drain_solenoid_pin = 14     # Output for drain solenoid
         
         self.status_poll_interval = 250       # Update interval for status LEDs
-        self.compressor_on_status_pin = 2     # Output for power LED (turns on monitoring)
-        self.compressor_on_status_pin2 = None # Secondary power LED output
+        self.compressor_on_status_pin = 2     # Output for power LED (indicates that pressure is being regulated)
+        self.compressor_on_status_pin2 = 25   # Output for secondary power LED
         self.error_status_pin = 5             # Output for error LED
         self.compressor_motor_status_pin = 4  # Output for compressor motor status LED
         self.purge_status_pin = 3             # Output for purge solenoid status LED
@@ -97,7 +98,7 @@ class CompressorSettings(Settings):
         self.value_down_button_pin = 13       # Input for value down button to decrement selected value
         
         self.use_multiple_threads = True
-        self.debug_mode = False
+        self.debug_mode = debug.DEBUG_NONE
 
     def setup_properties(self, defaults):
         self.private_keys = ('wlan_password')
@@ -124,7 +125,7 @@ async def main():
     pins = compressor_ui.CompressorPinMonitor(compressor, settings)
     pins.run()
     
-    if settings.debug_mode:
+    if settings.debug_mode & debug.DEBUG_COROUTINES:
         h = HeartbeatMonitor("coroutines", histogram_bin_width = 5)
         h.monitor_coroutines()
     

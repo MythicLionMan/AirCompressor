@@ -1,8 +1,7 @@
-from settings import Settings
-from settings import ValueScale
 from ringlog import RingLog
 from condlock import CondLock
 from heartbeatmonitor import HeartbeatMonitor
+import debug
 
 import compressorlogs
 from compressorlogs import EventLog
@@ -95,6 +94,17 @@ class CompressorController:
         else:
             self.line_pressure = self.tank_pressure
             self.line_sensor_error = self.tank_sensor_error
+            
+        if self.settings.debug_mode & debug.DEBUG_ADC:
+            if self.line_sensor_error and self.tank_sensor_error:
+                print("both pressure sensors are reporting an error")
+            elif self.line_sensor_error:
+                print("line_pressure_sensor reporting an error")
+            elif self.tank_sensor_error:
+                print("tank_pressure_sensor reporting an error")
+            
+            if not self.tank_sensor_error or not self.tank_sensor_error:
+                print("tank_pressure = " + str(self.tank_pressure) + " line_pressure = " + str(self.line_pressure))
             
     @property
     def _state_string(self):
@@ -345,13 +355,13 @@ class CompressorController:
         # unattended.
         watchdog = WDT(timeout=5000)
         self.running = True
-        if self.settings.debug_mode:
+        if self.settings.debug_mode & debug.DEBUG_THREADS:
             h = HeartbeatMonitor('compressorLoop', self.poll_interval, memory_debug = True, histogram_bin_width = 5)
         
         try:
             while self.running:
                 watchdog.feed()
-                if self.settings.debug_mode:
+                if self.settings.debug_mode & debug.DEBUG_THREADS:
                     h.update()
                 
                 with self.lock:
