@@ -2,6 +2,7 @@ import network
 from server import Server
 from server import flatten_dict
 from compressor_controller import CompressorController
+import debug
 
 import ujson
 import time
@@ -14,6 +15,7 @@ class CompressorServer(Server):
         Server.__init__(self, settings)
         self.compressor = compressor
         self.root_document = 'status.html'
+        self.log_requests = settings.debug_mode & debug.DEBUG_WEB_REQUEST
     
     # Overloads the base class method to supply state and settings values
     # as substitutions for html documents. Other documents do not get
@@ -39,7 +41,7 @@ class CompressorServer(Server):
 
             # TODO Don't log every endpoint, only log serving pages (every endpoint gets chatty)
             headers = await self.read_headers(reader)
-            (request_type, endpoint, parameters) = self.parse_request(request_line)
+            (request_type, endpoint, parameters) = self.parse_request(request_line, log_request = self.log_requests)
 
             compressor = self.compressor
                 

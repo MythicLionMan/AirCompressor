@@ -98,7 +98,7 @@ class CompressorSettings(Settings):
         self.value_down_button_pin = 13       # Input for value down button to decrement selected value
         
         self.use_multiple_threads = True
-        self.debug_mode = debug.DEBUG_NONE
+        self.debug_mode = debug.DEBUG_WEB_REQUEST
 
     def setup_properties(self, defaults):
         self.private_keys = ('wlan_password')

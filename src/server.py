@@ -13,7 +13,7 @@ class Server:
         self.wlan = None
         self.status_values = None
         
-    def parse_request(self, request_line):
+    def parse_request(self, request_line, log_request = False):
         (request_type, request, protocol) = request_line.decode('ascii').split()
 
         tokens = request.split('?')
@@ -36,10 +36,11 @@ class Server:
                 
                 parameters[key] = value
 
-        print("Request: ", request_line)
-        #print("Request Type: '{}'".format(request_type))
-        #print("Endpoint: '{}'".format(endpoint))
-        #print("Parameters: '{}' found: {}".format(parameter_strings, len(parameters)))
+        if log_request:
+            print("Request: ", request_line)
+            #print("Request Type: '{}'".format(request_type))
+            #print("Endpoint: '{}'".format(endpoint))
+            #print("Parameters: '{}' found: {}".format(parameter_strings, len(parameters)))
         
         return (request_type, endpoint, parameters)
 

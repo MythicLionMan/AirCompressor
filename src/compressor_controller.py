@@ -45,7 +45,10 @@ class CompressorController:
         self.activity_log = EventLog(thread_safe = thread_safe)
         self.command_log = CommandLog(thread_safe = thread_safe)
         self.state_log = StateLog(settings, thread_safe = thread_safe)
-        
+
+        self.activity_log.console_log = settings.debug_mode & debug.DEBUG_EVENT_LOG
+        self.command_log.console_log = settings.debug_mode & debug.DEBUG_ACTIVITY_LOG
+
         self.settings = settings
         self.lock = CondLock(thread_safe)
         self.thread_safe = thread_safe
