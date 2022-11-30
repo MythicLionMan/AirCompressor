@@ -155,13 +155,24 @@ class FetchLock {
 }
 
 class StateMonitor {
-    constructor(lastUpdateTimeId) {
+    constructor(lastUpdateTimeId, tankPressureGauge, linePressureGauge) {
         this.monitorId = null;
         this.server_time_offset = null;
         this.fetchPending = new FetchLock(settings.fetchRecoveryInterval);
         
         this.lastUpdateTimeElement = lastUpdateTimeId ? document.getElementById(lastUpdateTimeId) : null;
         this.stateElements = Array.from(document.getElementsByClassName('undefined_state'));
+        
+        var tankPressureCanvas = document.getElementById(tankPressureGauge);
+        if (tankPressureCanvas) {
+            this.tankPressureGauge = new Gauge(tankPressureCanvas);
+            this.tankPressureGauge.draw();
+        }
+        var linePressureCanvas = document.getElementById(linePressureGauge);
+        if (linePressureCanvas) {
+            this.linePressureGauge = new Gauge(linePressureCanvas);
+            this.linePressureGauge.draw();
+        }
     }
     
     // Begins periodically polling the server for the state of self
@@ -203,6 +214,7 @@ class StateMonitor {
             'duty_recovery_time': Date.now() / 1000 + 60*2,
             'start_pressure': 90,
             'stop_pressure': 125,
+            'min_line_pressure': 80,
             'max_duty': 0.6,
             'recovery_time': 60*2
         });        
@@ -233,6 +245,19 @@ class StateMonitor {
                 }
             }
         };
+        
+        if (this.tankPressureGauge) {
+            this.tankPressureGauge.value = state.tank_pressure;
+            this.tankPressureGauge.startPressure = state.start_pressure;
+            this.tankPressureGauge.stopPressure = state.stop_pressure;
+            this.tankPressureGauge.draw();
+        }
+        
+        if (this.linePressureGauge) {
+            this.linePressureGauge.value = state.line_pressure;
+            this.linePressureGauge.alarmPressure = state.min_line_pressure;
+            this.linePressureGauge.draw();
+        }
     }
 
     // Maps a state value from the json state definition to an HTML value.

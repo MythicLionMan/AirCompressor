@@ -8,12 +8,13 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/2.0.1/chartjs-plugin-annotation.min.js"></script>
     <script src="utils.js"></script>
+    <script src="pressureGauge.js"></script>
     <script>
         let stateMonitor = null;
         let compressorActions = null;
         let chartMonitor = null;
         window.onload = function() {{
-            stateMonitor = new StateMonitor('lastUpdateTime');
+            stateMonitor = new StateMonitor('lastUpdateTime', 'tankPressure', 'linePressure');
             compressorActions = new CompressorActions(stateMonitor);
             chartMonitor = new ChartMonitor('compressorTimeline');
             stateMonitor.monitor();
@@ -49,12 +50,12 @@
             <table>                
                 <tr>
                     <td>
-                        <div id="tank_pressure" class="pie pressurePie" style="--pressure:{tank_pressure}">{tank_pressure}</div>
-                        <label for="tank_pressure">Tank Pressure</label>
+                        <canvas id="tankPressure" width="200" height="200"></canvas>
+                        <label for="tankPressure">Tank Pressure</label>
                     </td>
                     <td>
-                        <div id="line_pressure" class="pie pressurePie" style="--pressure:{line_pressure}">{line_pressure}</div>
-                        <label for="line_pressure">Line Pressure</label>
+                        <canvas id="linePressure" width="200" height="200"></canvas>
+                        <label for="linePressure">Line Pressure</label>
                     </td>
                 </tr>
                 <tr>
@@ -82,9 +83,6 @@
         </div>
         <h2>Settings <a href="editSettings.html">Edit</a></h2>
         <table>
-            <tr><td>Start Pressure</td><td>{start_pressure}</td></tr>
-            <tr><td>Stop Pressure</td><td>{stop_pressure}</td></tr>
-            <tr><td>Line Pressure Alert</td><td>{min_line_pressure}</td></tr>            
             <tr><td>Max Duty</td><td>{max_duty}</td></tr>
             <tr><td>Recovery Time</td><td>{recovery_time}</td></tr>
         </table>

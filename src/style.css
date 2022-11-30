@@ -87,13 +87,13 @@
 }
 #duty + label, #duty_60 + label {
     display: block;
-    color: #bde0ff;
+    color: #536878;
     font-size: small;
     text-align: center;
 }
-#tank_pressure + label, #line_pressure + label {
+#tankPressure + label, #linePressure + label {
     display: block;
-    color: #bde0ff;
+    color: #536878;
     font-size: medium;
     text-align: center;
 }
