@@ -61,25 +61,43 @@ class CompressorController:
         self.request_run_flag = False    # If this is True the compressor will run the next time that it can
         self.motor_state = MOTOR_STATE_OFF  # MOTOR_STATE_RUN if the motor is running, otherwise the reason it is not
         self.purge_valve_open = False    # True when the purge valve is open, false when it is not
+        self.unload_valve_open = False   # True when the unload value is open, false when it is not
         self.purge_pending = False       # True when a purge is pending, false when it is not
         self.shutdown_time = 0           # The time when the compressor is scheduled to shutdown
+        self.unload_close_time = 0       # The time when the unload valve is scheduled to close
         self.duty_recovery_time = 0      # The time when the motor will have recovered from the last duty cycle violation
         self.tank_sensor_error = False   # The tank pressure sensor has detected an out of range value
         self.line_sensor_error = False   # The line pressure sensor has detected an out of range value
         self.running = False
-        
+                
         # Locate hardware registers
         self.tank_pressure_ADC = machine.ADC(settings.tank_pressure_pin)
         if settings.line_pressure_pin is not None:
             self.line_pressure_ADC = machine.ADC(settings.line_pressure_pin)
         else:
             self.line_pressure_ADC = None
-        self.compressor_motor = Pin(settings.compressor_motor_pin, Pin.OUT)
-        self.drain_solenoid = Pin(settings.drain_solenoid_pin, Pin.OUT)
+            
+        if settings.compressor_motor_pin is not None:
+            self.compressor_motor = Pin(settings.compressor_motor_pin, Pin.OUT)
+            # Ensure motor is stopped
+            self.compressor_motor.value(0)
+        else:
+            self.compressor_motor = None
 
-        # Ensure motor is stopped, solenoids closed
-        self.compressor_motor.value(0)
-        self.drain_solenoid.value(0)
+        if settings.unload_solenoid_pin is not None:
+            self.unload_solenoid = Pin(settings.unload_solenoid_pin, Pin.OUT)
+        else:
+            self.unload_solenoid = None
+
+        if settings.drain_solenoid_pin is not None:
+            self.drain_solenoid = Pin(settings.drain_solenoid_pin, Pin.OUT)
+            # Ensure that the drain valve is closed
+            self.drain_solenoid.value(0)
+        else:
+            self.drain_solenoid = None
+                    
+        # Start an unload cycle in case the compressor was interrupted on the last run
+        self._unload()
     
     def _read_ADC(self):
         self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())
@@ -158,6 +176,7 @@ class CompressorController:
                 "run_request": self.request_run_flag,
                 "purge_open": self.purge_valve_open,
                 "purge_pending": self.purge_pending,
+                "unload_open": self.unload_valve_open,
                 "shutdown": self.shutdown_time,
                 "duty_recovery_time": self.duty_recovery_time,
                 "duty": self.activity_log.calculate_duty(duty_duration),
@@ -223,18 +242,18 @@ class CompressorController:
 
     def purge(self, duration = None, delay = None):
         self.command_log.log_command(compressorlogs.COMMAND_PURGE)
+        if duration is None:
+            duration = self.settings.drain_duration
+        if delay is None:
+            delay = self.settings.drain_delay
+            
         self.purge_task = asyncio.create_task(self._purge(duration, delay))
 
     # NOTE: Unlike most private Compressor methods, this runs as a coroutine
     #       On the foreground thread, not on the background thread. Thus it
     #       must aquire a lock before performing any compressor specific actions
     async def _purge(self, duration, delay):
-        if duration is None:
-            duration = self.settings.drain_duration
-        if delay is None:
-            delay = self.settings.drain_delay
-            
-        if duration > 0:
+        if duration > 0 and self.drain_solenoid is not None:
             with self.lock:
                 self.purge_pending = True
             await asyncio.sleep(delay)
@@ -243,20 +262,24 @@ class CompressorController:
                 self._pause(MOTOR_STATE_PURGE)
                 
                 # Open the drain solenoid
-                self.drain_solenoid.value(1)            
+                self.drain_solenoid.value(1)
                 self.activity_log.log_start(compressorlogs.EVENT_PURGE)
                 self.purge_pending = False
                 self.purge_valve_open = True
             
             await asyncio.sleep(duration)
             with self.lock:
-                self.drain_solenoid.value(0)    
+                self.drain_solenoid.value(0)
                 self.activity_log.log_stop()
                 self.purge_valve_open = False
 
     def _run_motor(self):
+        if self.drain_solenoid is not None:
+            self.drain_solenoid.value(0)
+        if self.compressor_motor is None:
+            return
+            
         self.compressor_motor.value(1)
-        self.drain_solenoid.value(0)
         
         if self.motor_state != MOTOR_STATE_RUN:
             self.motor_state = MOTOR_STATE_RUN
@@ -268,9 +291,27 @@ class CompressorController:
             self._pause(MOTOR_STATE_PAUSE)
         
     def _pause(self, reason):
-        self.compressor_motor.value(0)
-        self.activity_log.log_stop()
-        self.motor_state = reason
+        if self.compressor_motor is not None:
+            self.compressor_motor.value(0)
+            self.activity_log.log_stop()
+            if self.motor_state == MOTOR_STATE_RUN:
+                self._unload()
+            self.motor_state = reason
+        
+    # Unlike purging (which is slightly more complex) unloading is handled directly by the update loop.
+    # Unloading is a critical operation, since motor damage could result if the unload valve fails to open.
+    def _unload(self):
+        print("Unload")
+        if self.unload_solenoid is not None:
+            self.unload_valve_open = True
+            self.unload_solenoid.value(1)
+            self.unload_close_time = time.time() + self.settings.unload_duration
+            
+    def _stop_unload(self):
+        print("Stop Unload")
+        if self.unload_solenoid is not None:
+            self.unload_valve_open = False
+            self.unload_solenoid.value(0)
 
     def _update(self):
         self._read_ADC()
@@ -286,8 +327,12 @@ class CompressorController:
             current_duty = 0
 
         self.state_log.log_state(current_pressure, self.line_pressure, current_duty, self._state_string)
-                    
-        # If the auto shutdown time has arrived schedule a shtudown task
+        
+        # If it is time to close the unload valve do so
+        if current_time > self.unload_close_time and self.unload_valve_open:
+            self._stop_unload()
+        
+        # If the auto shutdown time has arrived schedule a shutdown task
         if self.shutdown_time > 0 and current_time > self.shutdown_time and self.compressor_is_on:
             self.compressor_off()
 
@@ -336,8 +381,10 @@ class CompressorController:
     def _clean_up(self):
         # Make sure the motor isn't still running and the purge valve is closed,
         # since monitoring is about to stop
-        self.compressor_motor.value(0)
-        self.drain_solenoid.value(0)    
+        if self.compressor_motor is not None:
+            self.compressor_motor.value(0)
+        if self.drain_solenoid is not None:
+            self.drain_solenoid.value(0)
 
     async def _run_coroutine(self):
         print("WARNING: No watchdog timer in single thread mode. This is potentially dangerous.")

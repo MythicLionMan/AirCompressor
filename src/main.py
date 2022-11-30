@@ -24,6 +24,7 @@ default_settings = {
     "max_duty": 0.6,
     "duty_duration": 10*60,
     "drain_duration": 10,
+    "unload_duration": 20,
     "recovery_time": 3*60,
     "drain_delay": 5,
     "compressor_on_power_up": True,
@@ -79,7 +80,8 @@ class CompressorSettings(Settings):
         self.line_pressure_pin = None    # ADC pin for pressure sensor
         
         self.compressor_motor_pin = 15   # Output for compressor relay
-        self.drain_solenoid_pin = 14     # Output for drain solenoid
+        self.unload_solenoid_pin = 14    # Output for unload solenoid
+        self.drain_solenoid_pin = 16     # Output for drain solenoid
         
         self.status_poll_interval = 250       # Update interval for status LEDs
         self.compressor_on_status_pin = 2     # Output for power LED (indicates that pressure is being regulated)
@@ -145,4 +147,3 @@ async def main():
 
 # Run main to start configuration
 asyncio.run(main())
-
