@@ -162,6 +162,8 @@ class CompressorController:
                 min_line_pressure = self.settings.min_line_pressure
                 duty_duration = self.settings.duty_duration
             
+            total_runtime, log_start_time = self.activity_log.calculate_runtime()
+
             return {
                 "system_time": time.time(),
                 "tank_pressure": tank_pressure,
@@ -180,9 +182,8 @@ class CompressorController:
                 "shutdown": self.shutdown_time,
                 "duty_recovery_time": self.duty_recovery_time,
                 "duty": self.activity_log.calculate_duty(duty_duration),
-                # TODO Maybe this should be runtime in the last 60 minutes, since
-                #      that's the question it would be answering
-                "duty_60": self.activity_log.calculate_duty(60*60)
+                "runtime": total_runtime,
+                "log_start_time": log_start_time
             }        
                 
     # The next time the compressor is updated it will start to run if it can

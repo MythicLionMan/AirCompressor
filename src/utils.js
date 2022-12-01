@@ -200,7 +200,8 @@ class StateMonitor {
             'tank_pressure': 110 + Math.random() * 20,
             'line_pressure': 80 + Math.random() * 20,
             'duty': Math.random(),
-            'duty_60': Math.random(),
+            'runtime': Math.random()*60*60*4,
+            'log_start_time': Date.now() / 1000 - 60*60*4,
             'compressor_on': true,
             'run_request': false,
             'tank_underpressure': false,
@@ -265,8 +266,18 @@ class StateMonitor {
     map(key, value) {
         if (key == 'system_time') {
             value = new Date(value * 1000);
-            return value.toLocaleTimeString();        
-        } else if (key == 'shutdown' || key == 'duty_recovery_time') {
+            return value.toLocaleTimeString();
+        } else if (key == 'runtime') {
+            value = Math.round(value);
+            var hours   = Math.floor(value / 3600);
+            var minutes = Math.floor((value - (hours * 3600)) / 60);
+            var seconds = value - (hours * 3600) - (minutes * 60);
+
+            if (hours   < 10) { hours   = "0"+hours; }
+            if (minutes < 10) { minutes = "0"+minutes; }
+            if (seconds < 10) { seconds = "0"+seconds; }
+            return hours + ':' + minutes + ':' + seconds;
+        } else if (key == 'shutdown' || key == 'duty_recovery_time' || key == 'log_start_time') {
             // A value of 0 means that the time is not set
             if (value == 0) {
                 return 'never';
@@ -274,7 +285,7 @@ class StateMonitor {
 
             value = new Date(value * 1000 - this.server_time_offset);
             return value.toLocaleTimeString();
-        } else if (key == 'duty' || key == 'duty_60') {
+        } else if (key == 'duty') {
             return Math.round(value * 100).toString() + '%';
         } else if (key == 'tank_pressure' || key == 'line_pressure') {
             return value.toFixed(2);
