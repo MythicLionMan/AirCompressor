@@ -243,12 +243,6 @@ class StateMonitor {
             let element = document.getElementById(key);
             if (element) {
                 element.innerHTML = this.map(key, value);
-
-                if (element.style.getPropertyValue("--pressure")) {
-                    element.style.setProperty("--pressure", value);            
-                } else if (element.style.getPropertyValue("--percentageOne")) {
-                    element.style.setProperty("--percentageOne", value);            
-                }
             }
         };
         
@@ -275,8 +269,8 @@ class StateMonitor {
     // Maps a state value from the json state definition to an HTML value.
     // Derived classes can overload this to provide a different mapping.
     map(key, value) {
-        if (key == 'system_time') {
-            value = new Date(value * 1000);
+        if (key == 'system_time' || key == 'log_start_time') {
+            value = new Date(value * 1000 - this.server_time_offset);
             return value.toLocaleTimeString();
         } else if (key == 'runtime') {
             value = Math.round(value);
@@ -288,7 +282,7 @@ class StateMonitor {
             if (minutes < 10) { minutes = "0"+minutes; }
             if (seconds < 10) { seconds = "0"+seconds; }
             return hours + ':' + minutes + ':' + seconds;
-        } else if (key == 'shutdown' || key == 'duty_recovery_time' || key == 'log_start_time') {
+        } else if (key == 'shutdown' || key == 'duty_recovery_time') {
             // A value of 0 means that the time is not set
             if (value == 0) {
                 return 'never';
