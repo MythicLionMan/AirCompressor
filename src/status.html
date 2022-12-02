@@ -56,14 +56,14 @@
                 <canvas id="duty" width="100" height="100"></canvas>
             </div>
             <table>
-                <tr>
+                <tr class="smallInformation"><td>System Time</td><td id="system_time">{system_time}</td></tr>
+                <tr class="visibleWhenOn smallInformation" hidden><td>Shutdown Scheduled</td><td id="shutdown">{shutdown}</td></tr>
+                <tr class="visibleWhenDutyBlocked smallInformation" hidden><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
+                <tr class="smallInformation">
                     <td colspan=2>
                         Compressor has run for <span id='runtime'>{runtime}</span> since <span id='log_start_time'>{log_start_time}</span>.
                     </td>
                 </tr>
-                <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
-                <tr class="visibleWhenOn" hidden><td>Shutdown Scheduled</td><td id="shutdown">{shutdown}</td></tr>
-                <tr class="visibleWhenDutyBlocked" hidden><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
             </table>
             <div>
                 <button class="hiddenWhenOn" onclick="compressorActions.turnOn()">Turn On</button>

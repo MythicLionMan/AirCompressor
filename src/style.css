@@ -96,7 +96,7 @@
 /**
  * Visual Styles
  */
-#gauges {
+#gauges, .smallInformation {
     color: #536878;
     font-size: small;
 }
