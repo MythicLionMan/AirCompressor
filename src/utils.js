@@ -155,7 +155,7 @@ class FetchLock {
 }
 
 class StateMonitor {
-    constructor(lastUpdateTimeId, tankPressureGauge, linePressureGauge) {
+    constructor(lastUpdateTimeId, tankPressureGauge, linePressureGauge, dutyGraph) {
         this.monitorId = null;
         this.server_time_offset = null;
         this.fetchPending = new FetchLock(settings.fetchRecoveryInterval);
@@ -172,6 +172,11 @@ class StateMonitor {
         if (linePressureCanvas) {
             this.linePressureGauge = new Gauge(linePressureCanvas);
             this.linePressureGauge.draw();
+        }
+        var dutyGraphCanvas = document.getElementById(dutyGraph);
+        if (dutyGraphCanvas) {
+            this.dutyGraphCanvas = new PieChart(dutyGraphCanvas);
+            this.dutyGraphCanvas.draw();
         }
     }
     
@@ -258,6 +263,12 @@ class StateMonitor {
             this.linePressureGauge.value = state.line_pressure;
             this.linePressureGauge.alarmPressure = state.min_line_pressure;
             this.linePressureGauge.draw();
+        }
+        
+        if (this.dutyGraphCanvas) {
+            this.dutyGraphCanvas.value = state.duty;
+            this.dutyGraphCanvas.maxDuty = state.max_duty;
+            this.dutyGraphCanvas.draw();
         }
     }
 

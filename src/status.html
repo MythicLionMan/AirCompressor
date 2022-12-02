@@ -2,19 +2,19 @@
 <html>
     <head><title>Air Compressor</title></head>
     <link rel="stylesheet" type="text/css" href="style.css"/>
-    <link rel="stylesheet" type="text/css" href="pichart.css"/>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/1.30.1/date_fns.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/2.0.1/chartjs-plugin-annotation.min.js"></script>
     <script src="utils.js"></script>
     <script src="pressureGauge.js"></script>
+    <script src="pieChart.js"></script>
     <script>
         let stateMonitor = null;
         let compressorActions = null;
         let chartMonitor = null;
         window.onload = function() {{
-            stateMonitor = new StateMonitor('lastUpdateTime', 'tankPressure', 'linePressure');
+            stateMonitor = new StateMonitor('lastUpdateTime', 'tankPressure', 'linePressure', 'duty');
             compressorActions = new CompressorActions(stateMonitor);
             chartMonitor = new ChartMonitor('compressorTimeline');
             stateMonitor.monitor();
@@ -47,27 +47,25 @@
                 <div id="run_light"></div>
                 <div id="pressure_warning"></div>
             </div>
-            <table>                
+            <div id="gauges">
+                <label>
+                    <canvas id="tankPressure" width="200" height="200"></canvas>
+                    Tank Pressure
+                </label>
+                <label>
+                    <canvas id="linePressure" width="200" height="200"></canvas>
+                    Line Pressure
+                </label>
+                <label id="duty_label"><!--Runtime Last {duty_duration} Seconds-->
+                    <canvas id="duty" width="100" height="100"></canvas>
+                </label>
+            </div>
+            <table>
                 <tr>
-                    <td>
-                        <canvas id="tankPressure" width="200" height="200"></canvas>
-                        <label for="tankPressure">Tank Pressure</label>
-                    </td>
-                    <td>
-                        <canvas id="linePressure" width="200" height="200"></canvas>
-                        <label for="linePressure">Line Pressure</label>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <div id="duty" class="pie onePie" style="--percentageOne:{duty}">{duty}</div>
-                        <label for="duty">Runtime Last {duty_duration} Seconds</label>
-                    </td>
-                    <td>
+                    <td colspan=2>
                         Compressor has run for <span id='runtime'>{runtime}</span> since <span id='log_start_time'>{log_start_time}</span>.
                     </td>
                 </tr>
-                
                 <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
                 <tr class="visibleWhenOn" hidden><td>Shutdown Scheduled</td><td id="shutdown">{shutdown}</td></tr>
                 <tr class="visibleWhenDutyBlocked" hidden><td>Duty Recovery Time</td><td id="duty_recovery_time">{duty_recovery_time}</td></tr>
@@ -82,7 +80,6 @@
         </div>
         <h2>Settings <a href="editSettings.html">Edit</a></h2>
         <table>
-            <tr><td>Max Duty</td><td>{max_duty}</td></tr>
             <tr><td>Recovery Time</td><td>{recovery_time}</td></tr>
         </table>
     </body>
