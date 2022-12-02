@@ -73,24 +73,19 @@
     width: 400px;
     float: left;
 }
-#gauges > :nth-child(1), #gauges > :nth-child(2) {
-    width: 200px;
-    float: left;
-}
-#gauges > :nth-child(3) {
-    margin: 0 auto;
-    width: 100px;
-    display: block;
-}
 #tankPressure, #linePressure {
     width: 200px;
     height: 200px;
+    float: left;
 }
 #duty {
     width: 100px;
     height: 100px;
     position: relative;
     top: -38px;
+    margin: 0 auto;
+    width: 100px;
+    display: block;
 }
 
 /**
