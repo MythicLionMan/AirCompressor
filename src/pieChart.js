@@ -1,7 +1,8 @@
 
 class PieChart {
-    constructor(gauge) {
+    constructor(gauge, title) {
         this.gauge = gauge;
+        this.title = title;
         
         this.sweep = 1.5 * Math.PI;
         this.startAngle = 0.75 * Math.PI;
@@ -11,8 +12,9 @@ class PieChart {
         this.value = 0.6;
         this.maxValue = 0.6;
                 
-        this.valueFont = "25px serif";
+        this.valueFont = "20px serif";
         this.valueLabelColour = '#536878';
+        this.titleFont = "13px serif";
         
         this.backgroundColour = '#DDD';
         this.sweepColour = '#CCC';
@@ -34,6 +36,7 @@ class PieChart {
         var outerRadius = squareSize/2 - 5;
         var innerRadius = outerRadius - this.borderWidth;
         var centreRadius = innerRadius * this.centreRadius;
+        var titleYOffset = innerRadius - 4;
         
         ctx.save();
         ctx.clearRect(0, 0, width, height);
@@ -87,6 +90,14 @@ class PieChart {
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
         ctx.fillText(Math.round(this.value * 100) + "%", 0, 0);
+
+        // Gauge label
+        if (this.title) {
+            ctx.font = this.titleFont;
+            ctx.textBaseline = 'bottom';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.title, 0, titleYOffset);
+        }
         
         ctx.restore();
     }

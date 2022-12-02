@@ -1,6 +1,7 @@
 class Gauge {
-    constructor(gauge) {
+    constructor(gauge, title) {
         this.gauge = gauge;
+        this.title = title;
         
         this.min = 0;
         this.max = 150;
@@ -22,6 +23,7 @@ class Gauge {
         
         this.labelFont = "15px serif";
         this.valueFont = "25px serif";
+        this.titleFont = "13px serif";
         this.labelColour = '#536878';
         this.valueYOffset = 5;
         this.tickLabelInset = 15;
@@ -46,6 +48,7 @@ class Gauge {
         var squareSize = Math.min(width, height);
         var outerRadius = squareSize/2 - 5;
         var innerRadius = outerRadius - this.ringWidth/2;
+        var titleYOffset = innerRadius - 12;
         
         ctx.save();
         ctx.clearRect(0, 0, width, height);
@@ -79,6 +82,14 @@ class Gauge {
         ctx.textBaseline = 'top';
         ctx.textAlign = 'center';
         ctx.fillText(Math.round(this.value) + " PSI", 0, this.valueYOffset);
+        
+        // Gauge label
+        if (this.title) {
+            ctx.font = this.titleFont;
+            ctx.textBaseline = 'bottom';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.title, 0, titleYOffset);
+        }
         
         // Current Value Pointer
         if (this.value) {

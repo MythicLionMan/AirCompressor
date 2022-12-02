@@ -72,8 +72,6 @@
 #gauges {
     width: 400px;
     float: left;
-    position: relative;
-    top: -40px;
 }
 #gauges > :nth-child(1), #gauges > :nth-child(2) {
     width: 200px;
@@ -87,14 +85,12 @@
 #tankPressure, #linePressure {
     width: 200px;
     height: 200px;
-    position: relative;
-    top: 40px;
 }
 #duty {
     width: 100px;
     height: 100px;
     position: relative;
-    top: -15px;
+    top: -38px;
 }
 
 /**

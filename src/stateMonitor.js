@@ -9,17 +9,17 @@ class StateMonitor {
         
         var tankPressureCanvas = document.getElementById(tankPressureGauge);
         if (tankPressureCanvas) {
-            this.tankPressureGauge = new Gauge(tankPressureCanvas);
+            this.tankPressureGauge = new Gauge(tankPressureCanvas, 'Tank Pressure');
             this.tankPressureGauge.draw();
         }
         var linePressureCanvas = document.getElementById(linePressureGauge);
         if (linePressureCanvas) {
-            this.linePressureGauge = new Gauge(linePressureCanvas);
+            this.linePressureGauge = new Gauge(linePressureCanvas, 'Line Pressure');
             this.linePressureGauge.draw();
         }
         var dutyGraphCanvas = document.getElementById(dutyGraph);
         if (dutyGraphCanvas) {
-            this.dutyGraphCanvas = new PieChart(dutyGraphCanvas);
+            this.dutyGraphCanvas = new PieChart(dutyGraphCanvas, 'Duty');
             this.dutyGraphCanvas.draw();
         }
     }
