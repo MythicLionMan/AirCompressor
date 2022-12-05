@@ -1,5 +1,6 @@
 from settings import Settings
 from ringlog import RingLog
+from linear_least_squares import linear_least_squares
 
 import time
 
@@ -131,3 +132,20 @@ class StateLog(RingLog):
     @property
     def max_duration(self):
         return self.settings.log_interval * self.size_limit
+        
+    def linear_least_squares(self, value_index = 1, start_time = None, end_time = None):
+        with self.lock:
+            data = []
+            
+            # Find the coefficients of the equations of the two minimal lines
+            for i in range(len(self)):
+                log = self[i]
+                timeX = log[0]
+                if (start_time == None or timeX >= start_time) and (end_time == None or timeX <= end_time):
+                    data.append([timeX, log[value_index]])
+                    
+            if len(data) > 1:
+                return linear_least_squares(data)
+            else:
+                return (0, 0)
+            
