@@ -41,10 +41,14 @@
 # 0 = b(E - DB/A) - DC/A + F
 # b = (DC/A - F)/(E - DB/A)
 # b = (equation[1][0]*equation[0][2]/equation[0][0] - equation[1][2])/(equation[1][1] - equation[1][0]*equation[0][1]/equation[0][0])
-def linear_least_squares(data):
+def linear_least_squares(data, time_scale = 1):
+    # Time will be squared, so large values can blow up quickly. To prevent this normalize time by subtracting the min
+    # from all values
+    min_time = min(data, key=lambda x:x[0])[0]
+
     equations = [[0, 0, 0], [0, 0, 0]]
     for i in data:
-        timeX = i[0]
+        timeX = (i[0] - min_time)*time_scale
         valueY = i[1]
         
         equations[0][0] = equations[0][0] + 2*timeX
@@ -59,14 +63,14 @@ def linear_least_squares(data):
     
     # Substitute the second equation into the first to get m
     m = ((equations[0][1]*equations[1][2]/equations[1][1] - equations[0][2]))/(equations[0][0] - equations[1][0]*equations[0][1]/equations[1][1])
-    # Sustitute the frist equation into the second to get b
+    # Substitute the first equation into the second to get b
     b = (equations[1][0]*equations[0][2]/equations[0][0] - equations[1][2])/(equations[1][1] - equations[1][0]*equations[0][1]/equations[0][0])
 
     # TODO Only for testing.
-    print("m = " + str(m))
-    print("b = " + str(b))
-    print("residuals = " + str(residuals(m, b, data)))
-    print("residuals_total = " + str(residuals_total(m, b, data)))
+    #print("m = " + str(m))
+    #print("b = " + str(b))
+    #print("residuals = " + str(residuals(m, b, data)))
+    #print("residuals_total = " + str(residuals_total(m, b, data)))
 
     return (m, b)
 
@@ -97,8 +101,13 @@ def residuals_total(m, b, data):
 #    Sum =
 #    db = 20m + 8b - 56
 #    dm = 60m + 20b - 154
-def test():
-    d = [[1, 6], [2, 5], [3, 7], [4, 10]]
+def test_wiki():
+    test([[1, 6], [2, 5], [3, 7], [4, 10]])
+
+def test_sample():
+    test([[1671024242, 90.0], [1671024240, 90.1], [1671024238, 90.2]])
+
+def test(d):
     (m, b) = linear_least_squares(d)
     print("m = " + str(m))
     print("b = " + str(b))

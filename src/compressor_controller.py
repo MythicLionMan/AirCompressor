@@ -22,6 +22,7 @@ MOTOR_STATE_OFF=const('off')                    # compressor is in off mode
 MOTOR_STATE_SENSOR_ERROR=const('sensor_error')  # error reading pressure sensor
 MOTOR_STATE_PAUSE=const('pause')                # user pause requested
 MOTOR_STATE_PRESSURE=const('overpressure')      # upper pressure limit reached
+MOTOR_STATE_PRESSURE_CHANGE_ERROR=const('pressure_change_error') # The pressure didn't change when the motor started
 MOTOR_STATE_DUTY=const('duty')                  # duty limit reached
 MOTOR_STATE_PURGE=const('purge')                # purging in progress, motor disabled
 
@@ -66,9 +67,13 @@ class CompressorController:
         self.shutdown_time = 0           # The time when the compressor is scheduled to shutdown
         self.unload_close_time = 0       # The time when the unload valve is scheduled to close
         self.duty_recovery_time = 0      # The time when the motor will have recovered from the last duty cycle violation
+        self.tank_pressure = None
+        self.line_pressure = None
         self.tank_sensor_error = False   # The tank pressure sensor has detected an out of range value
         self.line_sensor_error = False   # The line pressure sensor has detected an out of range value
+        self.pressure_change_error = False # The pressure has not started to increase soon enough after starting the motor
         self.running = False
+        self.pressure_change_alert = None
                 
         # Locate hardware registers
         self.tank_pressure_ADC = machine.ADC(settings.tank_pressure_pin)
@@ -100,22 +105,31 @@ class CompressorController:
         self._unload()
     
     def _read_ADC(self):
-        self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())
-        # If either sensor returns None there is an error. Record the error, and then
-        # set the value to -1 so that it is a valid integer for calculations and serialization
-        self.tank_sensor_error = self.tank_pressure is None
-        if self.tank_pressure is None:
-            self.tank_pressure = -1
-
-        if self.line_pressure_ADC is not None:
-            self.line_pressure = self.settings.line_pressure_sensor.map(self.line_pressure_ADC.read_u16())
-            self.line_sensor_error = self.line_pressure is None
-            if self.line_pressure is None:
-                self.line_pressure = -1
+        if self.settings.debug_mode & debug.DEBUG_ADC_SIMULATE:
+            if self.tank_pressure is None:
+                self.tank_pressure = 90
+            elif self.motor_state == MOTOR_STATE_RUN:
+                self.tank_pressure = self.tank_pressure + 0.5
+            else:
+                self.tank_pressure = max(0, self.tank_pressure - 0.1)
+            self.line_pressure = min(self.tank_pressure, 90)
         else:
-            self.line_pressure = self.tank_pressure
-            self.line_sensor_error = self.tank_sensor_error
-            
+            self.tank_pressure = self.settings.tank_pressure_sensor.map(self.tank_pressure_ADC.read_u16())
+            # If either sensor returns None there is an error. Record the error, and then
+            # set the value to -1 so that it is a valid integer for calculations and serialization
+            self.tank_sensor_error = self.tank_pressure is None
+            if self.tank_pressure is None:
+                self.tank_pressure = -1
+
+            if self.line_pressure_ADC is not None:
+                self.line_pressure = self.settings.line_pressure_sensor.map(self.line_pressure_ADC.read_u16())
+                self.line_sensor_error = self.line_pressure is None
+                if self.line_pressure is None:
+                    self.line_pressure = -1
+            else:
+                self.line_pressure = self.tank_pressure
+                self.line_sensor_error = self.tank_sensor_error
+                
         if self.settings.debug_mode & debug.DEBUG_ADC:
             if self.line_sensor_error and self.tank_sensor_error:
                 print("both pressure sensors are reporting an error")
@@ -135,6 +149,8 @@ class CompressorController:
             short_state = 'f'
         elif self.motor_state == MOTOR_STATE_SENSOR_ERROR:
             short_state = 's'
+        elif self.motor_state == MOTOR_STATE_PRESSURE_CHANGE_ERROR:
+            short_state = '^'
         elif self.motor_state == MOTOR_STATE_PAUSE:
             short_state = '|'
         elif self.motor_state == MOTOR_STATE_PRESSURE:
@@ -173,6 +189,7 @@ class CompressorController:
                                       line_pressure < min_line_pressure,
                 "tank_sensor_error": self.tank_sensor_error,
                 "line_sensor_error": line_sensor_error,
+                "pressure_change_error": self.pressure_change_error,
                 "compressor_on": self.compressor_is_on,
                 "motor_state": self.motor_state,
                 "run_request": self.request_run_flag,
@@ -220,6 +237,8 @@ class CompressorController:
             if not self.compressor_is_on:
                 self.command_log.log_command(compressorlogs.COMMAND_ON)
                 self.compressor_is_on = True
+                # If there is a stored pressure_change_error, clear it
+                self.pressure_change_error = False
 
                 # If the shutdown parameter is > 0, schedule the shutdown relative to now
                 if shutdown_in > 0:
@@ -285,7 +304,23 @@ class CompressorController:
         if self.motor_state != MOTOR_STATE_RUN:
             self.motor_state = MOTOR_STATE_RUN
             self.activity_log.log_start(compressorlogs.EVENT_RUN)
+            self._monitor_for_pressure_change()
 
+    def _monitor_for_pressure_change(self):
+        pressure_change_duration = self.settings.pressure_change_duration
+        if self.pressure_change_alert == None and pressure_change_duration > 0:
+            self.pressure_change_alert = PressureChangeAlert(self.state_log, pressure_change_duration, self.settings.detect_pressure_change_threshold)
+            
+    def _update_alerts(self):
+        if self.pressure_change_alert:
+            try:
+                # If the alert has expired, cancel it
+                if self.pressure_change_alert.update():
+                    self.pressure_change_alert = None
+            except PressureChangeAlertError as err:
+                self.pressure_change_alert = None
+                self.pressure_change_error = True
+            
     def pause(self):
         with self.lock:
             self.command_log.log_command(compressorlogs.COMMAND_PAUSE)
@@ -350,6 +385,13 @@ class CompressorController:
             self._pause(MOTOR_STATE_PURGE)
             return
 
+        # Update any active alerts
+        self._update_alerts()
+        
+        if self.pressure_change_error:
+            self._pause(MOTOR_STATE_PRESSURE_CHANGE_ERROR)
+            return
+        
         # If the tank sensor value is out of range then shut off the motor
         if self.tank_sensor_error:
             self._pause(MOTOR_STATE_SENSOR_ERROR)
@@ -445,3 +487,47 @@ class CompressorController:
         # running coroutines it may be missed, so an explicity clean up will
         # ensure that the pins are set to low.
         self._clean_up()
+
+class PressureChangeAlertError(Exception):
+    pass
+    
+class PressureChangeAlert:
+    def __init__(self, state_log, duration, target_pressure_change):
+        self.state_log = state_log
+        
+        try:
+            self.start_time = time.time()
+            self.error_time = self.start_time + duration
+            # Find the pressure slope up to this time
+            # TODO This result is only valid if we have more than few samples. There should be a threshold on the number of samples.
+            (m, b) = self.state_log.linear_least_squares(start_time = self.start_time - duration)
+            # The target slope is the current slope (which accounts for any current load) plus the required
+            # change in value.
+            self.target_pressure_change = m + target_pressure_change
+        except ZeroDivisionError as err:
+            print("Zero division calculating linear_least_squares")
+            # The current rate of change couldn't be determined. Set the target based on an asumed rate of change of 0
+            # (Since the pressure chould not be increasing at the current time, this makes for a stricter requirement,
+            # since any loss due to a load will not be included in the target)
+            self.target_pressure_change = target_pressure_change
+            
+    def update(self):
+        current_time = time.time()
+        if current_time >= self.error_time:
+            print("PressureChangeAlert() has expired without detecting pressure change at time {} after {} seconds. Rasing an exception.".format(current_time, current_time - self.start_time))
+            raise PressureChangeAlertError()
+        
+        try:
+            # Find the pressure slope since the alert was created
+            # TODO This result is only valid if we have more than few samples. There should be a threshold on the number of samples.
+            (m, b) = self.state_log.linear_least_squares(start_time = self.start_time)
+            
+            if m >= self.target_pressure_change:
+                print("PressureChangeAlert() pressure slope = {} threshold {} reached, cancelling alert".format(m, self.target_pressure_change))
+                return True
+            else:
+                print("PressureChangeAlert() pressure slope = {} threshold {} not reached, continuing to monitor".format(m, self.target_pressure_change))
+        except ZeroDivisionError as err:
+            print("Zero division calculating linear_least_squares")
+        
+        return False

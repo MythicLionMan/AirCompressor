@@ -56,12 +56,13 @@ class LEDController:
         state = self.compressor.state_dictionary
         motor_state = state['motor_state']
         motor_running = motor_state == compressor_controller.MOTOR_STATE_RUN
+        pressure_change_error = state['pressure_change_error']
 
-        has_error = state['tank_underpressure'] or state['line_underpressure']
+        has_error = state['tank_underpressure'] or state['line_underpressure'] or pressure_change_error
 
         # Duty errors only matter when the tank is underpressure
         duty_error = motor_state == compressor_controller.MOTOR_STATE_DUTY and state['tank_underpressure']
-        error_flash = duty_error or state['tank_sensor_error']
+        error_flash = duty_error or state['tank_sensor_error'] or pressure_change_error
                 
         self._update_pin(self.compressor_on_status, state['compressor_on'])
         self._update_pin(self.compressor_on_status2, state['compressor_on'])

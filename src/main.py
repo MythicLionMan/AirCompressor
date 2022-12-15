@@ -31,6 +31,9 @@ default_settings = {
     "auto_stop_time": 6*60*60,
     "log_interval": 10,
     
+    "pressure_change_duration": 6,              # Number of seconds to wait for a pressure change before disabling motor
+    "detect_pressure_change_threshold": 0.35,   # The change in PSI/s required to determine that the motor is running properly
+    
     # WiFi configuration
     "ssid": 'A Network',
     "wlan_password": '',
@@ -100,7 +103,8 @@ class CompressorSettings(Settings):
         self.value_down_button_pin = 13       # Input for value down button to decrement selected value
         
         self.use_multiple_threads = True
-        self.debug_mode = debug.DEBUG_WEB_REQUEST | debug.DEBUG_EVENT_LOG | debug.DEBUG_ACTIVITY_LOG | debug.DEBUG_ADC
+        #self.debug_mode = debug.DEBUG_WEB_REQUEST | debug.DEBUG_EVENT_LOG | debug.DEBUG_ACTIVITY_LOG | debug.DEBUG_ADC | debug.DEBUG_ADC_SIMULATE
+        self.debug_mode = debug.DEBUG_NONE
 
     def setup_properties(self, defaults):
         self.private_keys = ('wlan_password')
