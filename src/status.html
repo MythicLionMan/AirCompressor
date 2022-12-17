@@ -22,7 +22,17 @@
             chartMonitor = new ChartMonitor('compressorTimeline');
             stateMonitor.monitor();
             chartMonitor.monitor();
+            stateMonitor.tankPressureGauge.startPressure = start_pressure;
+            stateMonitor.tankPressureGauge.stopPressure = stop_pressure;
+            stateMonitor.linePressureGauge.alarmPressure = min_line_pressure;
         }};
+        // TODO This isn't ideal here. I need the values to be substituted by the server, so they need to be
+        //      in html. But in debug mode they aren't available. A better solution would be to query for
+        //      settings and update the gauges that way. But I don't want to do that until/unless I migrate
+        //      to websockets
+        let start_pressure = {start_pressure};
+        let stop_pressure = {stop_pressure};
+        let min_line_pressure = {min_line_pressure};
     </script>
     <body>
         <div id="dataContainer">

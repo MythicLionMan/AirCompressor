@@ -90,14 +90,18 @@ class StateMonitor {
         
         if (this.tankPressureGauge) {
             this.tankPressureGauge.value = state.tank_pressure;
-            this.tankPressureGauge.startPressure = state.start_pressure;
-            this.tankPressureGauge.stopPressure = state.stop_pressure;
+            if (settings.debug) {
+                this.tankPressureGauge.startPressure = 90;
+                this.tankPressureGauge.stopPressure = 120;
+            }
             this.tankPressureGauge.draw();
         }
         
         if (this.linePressureGauge) {
             this.linePressureGauge.value = state.line_pressure;
-            this.linePressureGauge.alarmPressure = state.min_line_pressure;
+            if (settings.debug) {
+                this.linePressureGauge.alarmPressure = 80;
+            }
             this.linePressureGauge.draw();
         }
         
@@ -137,7 +141,11 @@ class StateMonitor {
         } else if (key == 'tank_pressure' || key == 'line_pressure') {
             return value.toFixed(2);
         } else if (key == 'pressure_change_trend') {
-            return value.toFixed(3);
+            if (value == null) {
+                return '';
+            } else {
+                return value.toFixed(3);
+            }
         }
         return value;
     }
