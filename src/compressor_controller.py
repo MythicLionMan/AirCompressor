@@ -172,6 +172,10 @@ class CompressorController:
             tank_pressure = self.tank_pressure
             line_pressure = self.line_pressure
             line_sensor_error = self.line_sensor_error
+            if self.pressure_change_alert:
+                pressure_change_trend = self.pressure_change_alert.last_slope
+            else:
+                pressure_change_trend = None
             
             with self.settings.lock:
                 start_pressure = self.settings.start_pressure
@@ -190,6 +194,7 @@ class CompressorController:
                 "tank_sensor_error": self.tank_sensor_error,
                 "line_sensor_error": line_sensor_error,
                 "pressure_change_error": self.pressure_change_error,
+                "pressure_change_trend": pressure_change_trend,
                 "compressor_on": self.compressor_is_on,
                 "motor_state": self.motor_state,
                 "run_request": self.request_run_flag,
@@ -500,16 +505,17 @@ class PressureChangeAlert:
             self.error_time = self.start_time + duration
             # Find the pressure slope up to this time
             # TODO This result is only valid if we have more than few samples. There should be a threshold on the number of samples.
-            (m, b) = self.state_log.linear_least_squares(start_time = self.start_time - duration)
+            (self.last_slope, b) = self.state_log.linear_least_squares(start_time = self.start_time - duration)
             # The target slope is the current slope (which accounts for any current load) plus the required
             # change in value.
-            self.target_pressure_change = m + target_pressure_change
+            self.target_pressure_change = self.last_slope + target_pressure_change
         except ZeroDivisionError as err:
             print("Zero division calculating linear_least_squares")
             # The current rate of change couldn't be determined. Set the target based on an asumed rate of change of 0
             # (Since the pressure chould not be increasing at the current time, this makes for a stricter requirement,
             # since any loss due to a load will not be included in the target)
             self.target_pressure_change = target_pressure_change
+            self.last_slope = 0
             
     def update(self):
         current_time = time.time()
@@ -520,13 +526,13 @@ class PressureChangeAlert:
         try:
             # Find the pressure slope since the alert was created
             # TODO This result is only valid if we have more than few samples. There should be a threshold on the number of samples.
-            (m, b) = self.state_log.linear_least_squares(start_time = self.start_time)
+            (self.last_slope, b) = self.state_log.linear_least_squares(start_time = self.start_time)
             
-            if m >= self.target_pressure_change:
-                print("PressureChangeAlert() pressure slope = {} threshold {} reached, cancelling alert".format(m, self.target_pressure_change))
+            if self.last_slope >= self.target_pressure_change:
+                print("PressureChangeAlert() pressure slope = {} threshold {} reached, cancelling alert".format(self.last_slope, self.target_pressure_change))
                 return True
             else:
-                print("PressureChangeAlert() pressure slope = {} threshold {} not reached, continuing to monitor".format(m, self.target_pressure_change))
+                print("PressureChangeAlert() pressure slope = {} threshold {} not reached, continuing to monitor".format(self.last_slope, self.target_pressure_change))
         except ZeroDivisionError as err:
             print("Zero division calculating linear_least_squares")
         

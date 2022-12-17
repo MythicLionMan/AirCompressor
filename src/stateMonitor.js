@@ -57,6 +57,7 @@ class StateMonitor {
             'line_underpressure': false,
             'tank_sensor_error': false,
             'line_sensor_error': false,
+            'pressure_change_trend': 0,
             'motor_state': 'run',
             'purge_open': true,
             'purge_pending': false,
@@ -135,6 +136,8 @@ class StateMonitor {
             return Math.round(value * 100).toString() + '%';
         } else if (key == 'tank_pressure' || key == 'line_pressure') {
             return value.toFixed(2);
+        } else if (key == 'pressure_change_trend') {
+            return value.toFixed(3);
         }
         return value;
     }

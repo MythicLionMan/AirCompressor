@@ -25,38 +25,62 @@
                 <input type="text" name="min_line_pressure" id="min_line_pressure" value="{min_line_pressure}">
             </label></p>
 
-            <p><label>Max Duty:
-                <input type="text" name="max_duty" id="max_duty" value="{max_duty}">
-            </label></p>
+            <section>
+                <h2>Duty Cycle</h2>
+                
+                <p><label>Max Duty:
+                    <input type="text" name="max_duty" id="max_duty" value="{max_duty}">
+                </label></p>
 
-            <p><label>Duty Duration:
-                <input type="text" name="duty_duration" id="duty_duration" value="{duty_duration}">
-            </label></p>
+                <p><label>Duty Duration:
+                    <input type="text" name="duty_duration" id="duty_duration" value="{duty_duration}">
+                </label></p>
 
-            <p><label>Recovery Time:
-                <input type="text" name="recovery_time" id="recovery_time" value="{recovery_time}">
-            </label></p>
+                <p><label>Recovery Time:
+                    <input type="text" name="recovery_time" id="recovery_time" value="{recovery_time}">
+                </label></p>
+            </section>
 
-            <p><label>Drain Duration:
-                <input type="text" name="drain_duration" id="drain_duration" value="{drain_duration}">
-            </label></p>
+            <section>
+                <h2>Drain/Unload</h2>
+                
+                <p><label>Drain Duration:
+                    <input type="text" name="drain_duration" id="drain_duration" value="{drain_duration}">
+                </label></p>
 
-            <p><label>Drain Delay:
-                <input type="text" name="drain_delay" id="drain_delay" value="{drain_delay}">
-            </label></p>
-            
-            <p><label>Compressor On Power Up:
-                <input type="text" name="compressor_on_power_up" id="compressor_on_power_up" value="{compressor_on_power_up}">
-            </label></p>
-            
-            <p><label>Auto Stop Time:
-                <input type="text" name="auto_stop_time" id="auto_stop_time" value="{auto_stop_time}">
-            </label></p>
-            
-            <p><label>Log Interval:
-                <input type="text" name="log_interval" id="log_interval" value="{log_interval}">
-            </label></p>
-            
+                <p><label>Drain Delay:
+                    <input type="text" name="drain_delay" id="drain_delay" value="{drain_delay}">
+                </label></p>
+                
+                <p><label>Unload Duration:
+                    <input type="text" name="unload_duration" id="unload_duration" value="{unload_duration}">
+                </label></p>
+            </section>
+
+            <section>
+                <h2>Pressure Change Detection</h2>
+                
+                <p><label>Pressure Change Duration:
+                    <input type="text" name="pressure_change_duration" id="pressure_change_duration" value="{pressure_change_duration}">
+                </label></p>
+                
+                <p><label>Detect Pressure Change Threshold:
+                    <input type="text" name="detect_pressure_change_threshold" id="detect_pressure_change_threshold" value="{detect_pressure_change_threshold}">
+                </label></p>
+            </section>
+                        
+            <section>
+                <h2>Startup/Shutdown</h2>
+                
+                <p><label>Compressor On Power Up:
+                    <input type="text" name="compressor_on_power_up" id="compressor_on_power_up" value="{compressor_on_power_up}">
+                </label></p>
+                
+                <p><label>Auto Stop Time:
+                    <input type="text" name="auto_stop_time" id="auto_stop_time" value="{auto_stop_time}">
+                </label></p>
+            </section>
+                        
             <section>
                 <h2>Tank Pressure Sensor</h2>
                 
@@ -96,6 +120,10 @@
                     <input type="text" name="line_pressure_sensor.sensor_max" value="{line_pressure_sensor>sensor_max}">
                 </label></p>
             </section>
+            
+            <p><label>Log Interval:
+                <input type="text" name="log_interval" id="log_interval" value="{log_interval}">
+            </label></p>            
 
             <input value="Submit" type="button" onclick="compressorActions.submitSettings('settings')">            
         <form>
