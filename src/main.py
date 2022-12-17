@@ -118,35 +118,32 @@ async def main():
     if not settings.activated:
         print('Settings has deactivated client. Aborting.')
         return
-        
+    
+    tasks = []
+    
     # Run the compressor no matter what. It is essential that the compressor
     # pressure is monitored
     compressor = compressor_controller.CompressorController(settings, thread_safe = settings.use_multiple_threads)
-    compressor.run()
+    tasks.append(compressor)
             
     # Start any UI coroutines to monitor and update the main thread
     if server_enabled:
-        server = compressor_server.CompressorServer(compressor, settings)
-        server.run()
-    status = compressor_ui.LEDController(compressor, settings)
-    status.run()
-    pins = compressor_ui.CompressorPinMonitor(compressor, settings)
-    pins.run()
+        tasks.append(compressor_server.CompressorServer(compressor, settings))
+    tasks.append(compressor_ui.LEDController(compressor, settings))
+    tasks.append(compressor_ui.CompressorPinMonitor(compressor, settings))
     
     if settings.debug_mode & debug.DEBUG_COROUTINES:
-        h = HeartbeatMonitor("coroutines", histogram_bin_width = 5)
-        h.monitor_coroutines()
+        tasks.append(HeartbeatMonitor("coroutines", histogram_bin_width = 5))
     
+    # Run all of the tasks
+    [task.run() for task in tasks]
+        
     try:
         # Loop forever while the coroutines process
         asyncio.get_event_loop().run_forever()
     finally:
         # Make sure that any background threads are terminated as well
-        compressor.stop()
-        if server_enabled:
-            server.stop()
-        status.stop()
-        pins.stop()
+        [task.stop() for task in tasks]
         print('Exception raised. Disabling background threads.')
         
     print("WARNING: Foreground coroutines are done.")

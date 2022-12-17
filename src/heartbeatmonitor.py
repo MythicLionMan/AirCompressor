@@ -4,7 +4,7 @@ import gc
 
 # A utility that can be used to time the regularity of a task event loop,
 # or of the coroutine event loop.
-# For timing couroutines call monitor_coroutines() and it will report on how
+# For timing couroutines call run() and it will report on how
 # regularly all of the other coroutines yield control to it. For timing
 # coroutines only a single monitor is needed, and any polling interval
 # can be used.
@@ -34,14 +34,18 @@ class HeartbeatMonitor:
         self.histogram_bin_width = histogram_bin_width
         self.histogram = [0 for i in range(histogram_bins)] 
         
-    def monitor_coroutines(self):
-        asyncio.create_task(self.coroutine_monitor())
+    def run(self):
+        asyncio.create_task(self._run())
 
-    async def coroutine_monitor(self):
-        while True:
+    async def _run(self):
+        self.running = True
+        while self.running:
             self.update()
             await asyncio.sleep(self.interval)
-            
+
+    def stop(self):
+        self.running = False
+        
     def update(self):        
         millis = time.ticks_ms()
         variance = time.ticks_diff(millis, self.prev_millis) - self.interval*1000
