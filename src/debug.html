@@ -21,6 +21,12 @@
         
             <h2>State</h2>
             <div class='visibleWhenCompressorError' hidden>Warning: server has not responded since <span id='lastUpdateTime'></span></div>
+            <div class='visibleWhenSensorError' hidden>Warning: the tank sensor has returned an invalid value. Check the wiring.</div>
+            <div class='visibleWhenPressureChangeError' hidden>
+                Warning: the tank pressure is not increasing after starting the motor.
+                Check for air leaks, electrical issues, or a stalled motor, then turn
+                off and on to clear.
+            </div>
             <table>
                 <tr><td>System Time</td><td id="system_time">{system_time}</td></tr>
                 <tr><td>Tank Pressure</td><td id="tank_pressure">{tank_pressure}</td></tr>

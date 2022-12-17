@@ -28,16 +28,17 @@ class FetchLock {
         this.recovery = recovery;
     }
     
-    // Returns true if a new fetch can be scheduled, false if there is an outstanding
+    // Returns false if a new fetch can be scheduled, true if there is an outstanding
     // fetch that hasn't timed out yet. If this is unlocked it will be locked after the
     // call.
     isLocked() {
         if (this.fetchPending) {
             // The last fetch is still pending, so don't start a new one
-            return false;
+            return true;
         }
         let t = this;
         this.fetchPending = setTimeout(() => t.unlock(), this.recovery);
+        return false;
     }
     
     // Clears the pending lock and allows another fetch to proceed. Call this when

@@ -62,9 +62,6 @@ class StateMonitor {
             'purge_pending': false,
             'shutdown': Date.now() / 1000 + 60*60*5,
             'duty_recovery_time': Date.now() / 1000 + 60*2,
-            'start_pressure': 90,
-            'stop_pressure': 125,
-            'min_line_pressure': 80,
             'max_duty': 0.6,
             'recovery_time': 60*2
         });
@@ -160,7 +157,7 @@ class StateMonitor {
         let booleanStateClassNames = [
             'compressor_on', 'run_request', 'purge_pending', 'purge_open',
             'tank_underpressure', 'line_underpressure', 'tank_sensor_error',
-            'line_sensor_error'
+            'line_sensor_error', 'pressure_change_error'
         ];
 
         // Calculate some extra compound states that are difficult or impossible in css

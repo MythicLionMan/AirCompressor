@@ -23,6 +23,7 @@
  * visibleWhenCompressorError: Only visible when an ancestor has the error class
  * visibleWhenSensorError: Only visible when an ancestor has the sensor error class
  * visibleWhenDutyBlocked: Only visible when an ancestor has the motor_state_duty class
+ * visibleWhenPressureChangeError: Only visible when an ancestor has the .pressure_change_error class
  */
 
 .motor_state_run .hiddenWhenRunning, .run_request .hiddenWhenRunning,
@@ -40,7 +41,8 @@
 .pause_command_available .visibleWhenPauseAvailable,
 .run_command_available .visibleWhenRunAvailable,
 .motor_state_sensor_error .visibleWhenSensorError,
-.compressor_error .visibleWhenCompressorError {
+.compressor_error .visibleWhenCompressorError,
+.pressure_change_error .visibleWhenPressureChangeError {
     display: inline;
 }
 
@@ -100,7 +102,7 @@
 }
 
 /* Errors are in large red text */
-.visibleWhenCompressorError, .visibleWhenSensorError {
+.visibleWhenCompressorError, .visibleWhenSensorError, .visibleWhenPressureChangeError {
     color: red;
     font-size: large;
 }
