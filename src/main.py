@@ -102,6 +102,8 @@ class CompressorSettings(Settings):
         self.value_up_button_pin = 12         # Input for value up button to increment selected value
         self.value_down_button_pin = 13       # Input for value down button to decrement selected value
         
+        self.http_root = 'http/'
+        
         self.use_multiple_threads = True
         #self.debug_mode = debug.DEBUG_WEB_REQUEST | debug.DEBUG_EVENT_LOG | debug.DEBUG_ACTIVITY_LOG | debug.DEBUG_ADC | debug.DEBUG_ADC_SIMULATE
         self.debug_mode = debug.DEBUG_NONE

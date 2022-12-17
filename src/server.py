@@ -29,7 +29,7 @@ class Server:
             parameter_strings = str(tokens[1])
         
         parameters = {}
-        if not parameter_strings == None:
+        if not parameter_strings == None and len(parameter_strings):
             kv = parameter_strings.split('&')
             for pair in kv:
                 (key, value) = pair.split('=')
@@ -84,7 +84,7 @@ class Server:
 
             self.response_header(writer, content_type = content_type)
 
-            f = open(path)
+            f = open(self.settings.http_root + path)
             # Transimit the document one line at a time to save memory
             while True:
                 line = f.readline()
@@ -170,10 +170,6 @@ class Server:
                 self.server = await asyncio.start_server(self.serve_client, "0.0.0.0", 80)
                 
                 print('Server has started and is waiting for requests.')
-                while self.wlan.isconnected():
-                    await asyncio.sleep(2)
-                
-                print('Network has disconnected. Shutting down server for restart.')
                 await self.server.wait_closed()
                 print('Server has shut down.')
             except Exception as e:
