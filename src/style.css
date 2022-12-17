@@ -65,15 +65,21 @@
 /**
  * Layout
  */
- 
+#dataContainer {
+    display: flex;
+    flex-flow: row wrap;
+    justify-content: center;    
+}
 #compressorTimelineContainer {
-    float: right;
-    width: 65%;
+    min-width: 400px;
     aspect-ratio: 3/2;
+    flex-grow: 1;
+    flex-basis: 60%;
+}
+#statusPanel {
 }
 #gauges {
     width: 400px;
-    float: left;
 }
 #tankPressure, #linePressure {
     width: 200px;
