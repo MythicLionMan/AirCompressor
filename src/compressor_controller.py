@@ -242,8 +242,8 @@ class CompressorController:
             if not self.compressor_is_on:
                 self.command_log.log_command(compressorlogs.COMMAND_ON)
                 self.compressor_is_on = True
-                # If there is a stored pressure_change_error, clear it
-                self.pressure_change_error = False
+                # Clear any alerts that were pending when the compressor ran last
+                self._clear_conditions()
 
                 # If the shutdown parameter is > 0, schedule the shutdown relative to now
                 if shutdown_in > 0:
@@ -315,8 +315,25 @@ class CompressorController:
         pressure_change_duration = self.settings.pressure_change_duration
         if self.pressure_change_alert == None and pressure_change_duration > 0:
             self.pressure_change_alert = PressureChangeAlert(self.state_log, pressure_change_duration, self.settings.detect_pressure_change_threshold)
-            
-    def _update_alerts(self):
+
+    # Clears any conditions or alerts that were set the last time that the compressor ran
+    def _clear_conditions(self):
+        # If there is a stored pressure_change_error, clear it
+        self.pressure_change_error = False
+        # A side effect of restarting the compressor is clearing the duty recovery time
+        # This is intended to provide an easy way to clear a duty recovery timer when needed
+        # (it's a feature, not a bug)
+        self.duty_recovery_time = 0
+                
+    def _should_pause(self, current_time, max_duty, current_duty):
+        if not self.compressor_is_on:
+            # Dont run the motor if the compressor is off (in other words, if it is not maintaining pressure)
+            self.request_run_flag = False
+            return MOTOR_STATE_OFF
+        if self.purge_valve_open or self.purge_pending:
+            # Dont run the motor if the purge valve is open
+            return MOTOR_STATE_PURGE
+
         if self.pressure_change_alert:
             try:
                 # If the alert has expired, cancel it
@@ -325,7 +342,32 @@ class CompressorController:
             except PressureChangeAlertError as err:
                 self.pressure_change_alert = None
                 self.pressure_change_error = True
-            
+                
+        if self.pressure_change_error:
+            return MOTOR_STATE_PRESSURE_CHANGE_ERROR
+        
+        # If the tank sensor value is out of range then shut off the motor
+        if self.tank_sensor_error:
+            return MOTOR_STATE_SENSOR_ERROR
+                        
+        if current_time < self.duty_recovery_time:
+            return MOTOR_STATE_DUTY
+        
+        if max_duty < 1 and current_duty > max_duty:
+            # If the motor is currently running trigger a request to run again once
+            # the duty cycle condition is cleared
+            self.request_run_flag = self.request_run_flag or self.motor_state == MOTOR_STATE_RUN
+
+            # TODO recovery_time could be calculated by averaging (or taking the  max) of the last few
+            #      run cycles. For now it's just a setting
+            self.duty_recovery_time = current_time + self.settings.recovery_time
+            # TODO If we have a 'next' compressor we could pass them a duty token
+            #      so that they run, and disable self so that we do not. This isn't the
+            #      best approach to load balancing though, so more thought is be required
+            return MOTOR_STATE_DUTY
+        
+        return None
+                
     def pause(self):
         with self.lock:
             self.command_log.log_command(compressorlogs.COMMAND_PAUSE)
@@ -336,6 +378,10 @@ class CompressorController:
             self.compressor_motor.value(0)
             self.activity_log.log_stop()
             if self.motor_state == MOTOR_STATE_RUN:
+                # If there was a pressure_change_alert it will not be valid when the motor starts up again.
+                # Clear it now.
+                self.pressure_change_alert = None
+                # Start an unload cycle
                 self._unload()
             self.motor_state = reason
         
@@ -382,42 +428,10 @@ class CompressorController:
         if current_pressure > self.settings.stop_pressure:
             self.request_run_flag = False
 
-        if not self.compressor_is_on:
-            self.request_run_flag = False
-            self._pause(MOTOR_STATE_OFF)
-            return
-        if self.purge_valve_open or self.purge_pending:
-            self._pause(MOTOR_STATE_PURGE)
-            return
-
-        # Update any active alerts
-        self._update_alerts()
-        
-        if self.pressure_change_error:
-            self._pause(MOTOR_STATE_PRESSURE_CHANGE_ERROR)
-            return
-        
-        # If the tank sensor value is out of range then shut off the motor
-        if self.tank_sensor_error:
-            self._pause(MOTOR_STATE_SENSOR_ERROR)
-            return
-                        
-        if current_time < self.duty_recovery_time:
-            self._pause(MOTOR_STATE_DUTY)
-            return
-        
-        if max_duty < 1 and current_duty > max_duty:
-            # If the motor is currently running trigger a request to run again once
-            # the duty cycle condition is cleared
-            self.request_run_flag = self.request_run_flag or self.motor_state == MOTOR_STATE_RUN
-
-            self._pause(MOTOR_STATE_DUTY)
-            # TODO recovery_time could be calculated by averaging (or taking the  max) of the last few
-            #      run cycles. For now it's just a setting
-            self.duty_recovery_time = current_time + self.settings.recovery_time
-            # TODO If we have a 'next' compressor we could pass them a duty token
-            #      so that they run, and disable self so that we do not. This isn't the
-            #      best approach to load balancing though, so more thought is be required
+        # Before controlling the motor check to see if there is a reason that the compressor should be paused
+        pause_reason = self._should_pause(current_time, max_duty, current_duty)
+        if pause_reason is not None:
+            self._pause(pause_reason)
             return
 
         if current_pressure > self.settings.stop_pressure:
