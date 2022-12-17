@@ -43,21 +43,17 @@ class RingLog:
     # NOTE If the blocking parameter is false, then the writer will not be drained. The caller
     #      will not be blocked, but it will also be necessary for the writer to buffer all of
     #      the data, so the memory consumption will be much larger. This is an unfortunate
-    #      tradeoff if the caller requires a lock on another thread. In many cases it may be
-    #      fine to block the calling thread for the duration of the write, but there is a risk
-    #      that if the buffer fill up the caller may be blocked while waiting on the network to
-    #      flush (on the flip side, bytes may be lost if the buffer is full. I'm not sure how
-    #      this is handled)
+    #      tradeoff if the caller requires a lock on another thread.
     async def dump(self, writer, since, filter_index = 0, blocking = True):
         # TODO It may not be necessary to lock the log for the entire duration of
         #      the write. This could alleviate the need for the blocking parameter.
         #      But it would be necessary to ensure that a new log has not overwriten
         #      one of the logs we're about to send. For now I'll just lock the whole
         #      thing.
-        with self.lock:
-            if blocking:
-                await writer.drain()
+        if blocking:
+            await writer.drain()
             
+        with self.lock:
             first_log = True
             for i in range(self.count):
                 log = self[i]
