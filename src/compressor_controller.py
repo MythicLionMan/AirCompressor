@@ -183,7 +183,6 @@ class CompressorController:
                 duty_duration = self.settings.duty_duration
             
             total_runtime, log_start_time = self.activity_log.calculate_runtime()
-
             return {
                 "system_time": time.time(),
                 "tank_pressure": tank_pressure,
@@ -206,7 +205,7 @@ class CompressorController:
                 "duty": self.activity_log.calculate_duty(duty_duration),
                 "runtime": total_runtime,
                 "log_start_time": log_start_time
-            }        
+            }
                 
     # The next time the compressor is updated it will start to run if it can
     def request_run(self):
@@ -369,9 +368,9 @@ class CompressorController:
         return None
                 
     def pause(self):
+        self.command_log.log_command(compressorlogs.COMMAND_PAUSE)
         with self.lock:
-            self.command_log.log_command(compressorlogs.COMMAND_PAUSE)
-        self._pause(MOTOR_STATE_PAUSE)
+            self._pause(MOTOR_STATE_PAUSE)
         
     def _pause(self, reason):
         if self.compressor_motor is not None:
