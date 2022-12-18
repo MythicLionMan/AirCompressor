@@ -2,7 +2,8 @@ class StateMonitor {
     constructor(lastUpdateTimeId, tankPressureGauge, linePressureGauge, dutyGraph) {
         this.monitorId = null;
         this.server_time_offset = null;
-        this.fetchPending = new FetchLock(settings.fetchRecoveryInterval);
+        let t = this;
+        this.fetchPending = new FetchLock(settings.fetchRecoveryInterval, () => t.handleFetchStateError('State fetch overdue.'));
         
         this.lastUpdateTimeElement = lastUpdateTimeId ? document.getElementById(lastUpdateTimeId) : null;
         this.stateElements = Array.from(document.getElementsByClassName('undefined_state'));
@@ -239,34 +240,21 @@ class StateMonitor {
             return;
         }
         let t = this;
-        // Show an alert if we don't hear from this fetch in a timely fashion
-        this.fetchLate = setTimeout(() => t.fetchLateHandler(), settings.stateFetchLateInterval);
-                
         // Query the server
         fetch('/status', {
            method: 'GET',
            headers: {
                'Accept': 'application/json',
-           }
+           },
+           signal: this.fetchPending.abortController.signal
         })
         .then((response) => response.json())
         .then((data) => t.handleFetchStateResponse(data))
         .catch((error) => t.handleFetchStateError(error))
         .finally(() => t.fetchPending.unlock());
     }
-    
-    fetchLateHandler() {
-        this.fetchLate = null;
-        this.handleFetchStateError('State fetch overdue.');
-    }
-    
-    handleFetchStateResponse(data) {
-        // Cancel any pending fetchLate watchdog
-        if (this.fetchLate) {
-            clearTimeout(this.fetchLate);
-            this.fetchLate = null;
-        }
         
+    handleFetchStateResponse(data) {        
         this.removeStateClass('compressor_error');
         
         // Update the time when the last succesful update was received

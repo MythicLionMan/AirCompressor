@@ -283,7 +283,8 @@ class ChartMonitor {
                method: 'GET',
                headers: {
                    'Accept': 'application/json',
-               }
+               },
+               signal: this.stateFetchPending.abortController.signal
             })
             .then((response) => response.json())
             .then((data) => t.processStateData(data))
@@ -298,7 +299,8 @@ class ChartMonitor {
                method: 'GET',
                headers: {
                    'Accept': 'application/json',
-               }
+               },
+               signal: this.activityFetchPending.abortController.signal
             })
             .then((response) => response.json())
             .then((data) => t.processActivity(data))
