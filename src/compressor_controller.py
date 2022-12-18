@@ -371,7 +371,7 @@ class CompressorController:
     def pause(self):
         with self.lock:
             self.command_log.log_command(compressorlogs.COMMAND_PAUSE)
-            self._pause(MOTOR_STATE_PAUSE)
+        self._pause(MOTOR_STATE_PAUSE)
         
     def _pause(self, reason):
         if self.compressor_motor is not None:
