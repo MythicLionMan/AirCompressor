@@ -1,5 +1,5 @@
 import network
-from server import Server
+from server import ServerController
 from server import flatten_dict
 from compressor_controller import CompressorController
 import debug
@@ -10,9 +10,9 @@ import sys
 
 import uasyncio as asyncio
 
-class CompressorServer(Server):
+class CompressorServer(ServerController):
     def __init__(self, compressor, settings):
-        Server.__init__(self, settings)
+        ServerController.__init__(self, settings)
         self.compressor = compressor
         self.root_document = 'status.html'
         self.log_requests = settings.debug_mode & debug.DEBUG_WEB_REQUEST

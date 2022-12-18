@@ -6,7 +6,7 @@ import ujson
 import sys
     
 # Loosly based on https://gist.github.com/aallan/3d45a062f26bc425b22a17ec9c81e3b6
-class Server:
+class ServerController:
     def __init__(self, settings):
         self.settings = settings
         self.server = None
@@ -207,3 +207,59 @@ def flatten_dict(input_dict, output_dict = None, prefix = None):
             output_dict[key] = value
             
     return output_dict
+
+# Class representing a TCP stream server, can be closed and used in "async with"
+class MyServer:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        self.close()
+        await self.wait_closed()
+
+    def close(self):
+        self.task.cancel()
+
+    async def wait_closed(self):
+        await self.task
+
+    async def _serve(self, s, cb):
+        # Accept incoming connections
+        while True:
+            print('Server loop start')
+            try:
+                yield asyncio._io_queue.queue_read(s)
+            except asyncio.CancelledError:
+                print('Server cancelled! Abort!')
+                # Shutdown server
+                s.close()
+                return
+            try:
+                s2, addr = s.accept()
+            except:
+                # Ignore a failed accept
+                print('Got exception accepting connection. Ignoring')
+                continue
+            print('Server has received connection. Starting handler task')
+            s2.setblocking(False)
+            s2s = Stream(s2, {"peername": addr})
+            asyncio.create_task(cb(s2s, s2s))
+
+
+# Helper function to start a TCP stream server, running as a new task
+# TODO could use an accept-callback on socket read activity instead of creating a task
+async def my_start_server(cb, host, port, backlog=5):
+    import usocket as socket
+
+    # Create and bind server socket.
+    host = socket.getaddrinfo(host, port)[0]  # TODO this is blocking!
+    s = socket.socket()
+    s.setblocking(False)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(host[-1])
+    s.listen(backlog)
+
+    # Create and return server object and task.
+    srv = MyServer()
+    srv.task = asyncio.create_task(srv._serve(s, cb))
+    return srv
