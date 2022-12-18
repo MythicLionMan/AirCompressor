@@ -58,7 +58,7 @@ class FetchLock {
     // Cancels anything waiting on the abort controller, calls the abortHandler,
     // then calls unlock()
     abortAndUnlock() {
-        if (this.abortController) this.abortController.cancel();
+        if (this.abortController) this.abortController.abort();
         if (this.abortHandler) this.abortHandler();
         this.unlock();
     }

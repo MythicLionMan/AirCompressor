@@ -116,12 +116,13 @@
  * Status lights
  *
  * - power_light is green when on, red when off
- * - run_light is blue when on, amber when purging, grey when off. Flashes for pending actions
- * - pressure_warning is on when the motor is not running because the duty cycle has been exceeded,
- *                    or when tank_underpressure or line_underpressure is true.
+ * - run_light is blue when on, amber when purging, grey when off. Flashes for pending actions and when the
+ *             duty cycle has been exceeded and the motor cannot run
+ * - error_light is on when tank_underpressure or line_underpressure is true. It is flashing
+ *             when there is an error such as a sensor error or pressure change error.
  */
 
-div#power_light, div#run_light, div#pressure_warning {
+div#power_light, div#run_light, div#error_light {
     display: inline-block;
     margin-right: 6px;
     margin-left: 6px;
@@ -134,9 +135,10 @@ div#power_light, div#run_light, div#pressure_warning {
 
 /* From https://codersblock.com/blog/creating-glow-effects-with-css/ */
 div#power_light,
-.motor_state_duty div#pressure_warning,
-.tank_underpressure div#pressure_warning,
-.line_underpressure div#pressure_warning {
+.tank_underpressure div#error_light,
+.line_underpressure div#error_light,
+.motor_state_sensor_error div#error_light,
+.motor_state_pressure_change_error div#error_light  {
     background-color: #fdd;    
     box-shadow:
         0 0 7px 3px #fff,  /* inner white */
@@ -149,8 +151,11 @@ div#power_light,
         0 0 10px 5px #0f0  /* green */
 }
 
-/* For motor running or run request pending set the light to blue */
-.motor_state_run div#run_light, .run_request div#run_light {
+/* For motor running, run request pending, or motor pending because of
+   a duty condition set the light to blue */
+.motor_state_run div#run_light,
+.run_request div#run_light,
+.motor_state_duty div#run_light {
     background-color: #ddf;    
     box-shadow:
         0 0 7px 3px #fff,  /* inner white */
@@ -163,10 +168,12 @@ div#power_light,
         0 0 7px 3px #fff,     /* inner white */
         0 0 10px 5px #ffbf00  /* amber */
 }
-/* If either of the pending modes are active, blink the run light */
+/* Blink any lights that have an alert condition */
 .purge_pending div#run_light,
 .run_request div#run_light,
-.motor_state_duty div#pressure_warning {
+.motor_state_duty div#run_light,
+.motor_state_sensor_error div#error_light,
+.motor_state_pressure_change_error div#error_light {
     animation: blinker 1s linear infinite;
 }
 
