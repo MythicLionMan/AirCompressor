@@ -74,6 +74,8 @@ class CompressorController:
         self.pressure_change_error = False # The pressure has not started to increase soon enough after starting the motor
         self.running = False
         self.pressure_change_alert = None
+        self.min_pressure_change = 0
+        self.max_pressure_change = 0
                 
         # Locate hardware registers
         self.tank_pressure_ADC = machine.ADC(settings.tank_pressure_pin)
@@ -172,10 +174,6 @@ class CompressorController:
             tank_pressure = self.tank_pressure
             line_pressure = self.line_pressure
             line_sensor_error = self.line_sensor_error
-            if self.pressure_change_alert:
-                pressure_change_trend = self.pressure_change_alert.last_slope
-            else:
-                pressure_change_trend = None
             
             with self.settings.lock:
                 start_pressure = self.settings.start_pressure
@@ -193,7 +191,8 @@ class CompressorController:
                 "tank_sensor_error": self.tank_sensor_error,
                 "line_sensor_error": line_sensor_error,
                 "pressure_change_error": self.pressure_change_error,
-                "pressure_change_trend": pressure_change_trend,
+                "min_pressure_change": self.min_pressure_change,
+                "max_pressure_change": self.max_pressure_change,
                 "compressor_on": self.compressor_is_on,
                 "motor_state": self.motor_state,
                 "run_request": self.request_run_flag,
@@ -313,7 +312,7 @@ class CompressorController:
     def _monitor_for_pressure_change(self):
         pressure_change_duration = self.settings.pressure_change_duration
         if self.pressure_change_alert == None and pressure_change_duration > 0:
-            self.pressure_change_alert = PressureChangeAlert(self.state_log, pressure_change_duration, self.settings.detect_pressure_change_threshold)
+            self.pressure_change_alert = PressureChangeAlert(self.state_log, pressure_change_duration, self.settings.detect_pressure_change_threshold, self.settings.required_number_of_pressure_change_samples)
 
     # Clears any conditions or alerts that were set the last time that the compressor ran
     def _clear_conditions(self):
@@ -333,10 +332,15 @@ class CompressorController:
             # Dont run the motor if the purge valve is open
             return MOTOR_STATE_PURGE
 
-        if self.pressure_change_alert:
+        if self.pressure_change_alert:            
             try:
                 # If the alert has expired, cancel it
-                if self.pressure_change_alert.update():
+                cancel_alert = self.pressure_change_alert.update()
+                
+                self.min_pressure_change = min(self.min_pressure_change, self.pressure_change_alert.min_slope)
+                self.max_pressure_change = max(self.max_pressure_change, self.pressure_change_alert.max_slope)
+                
+                if cancel_alert:
                     self.pressure_change_alert = None
             except PressureChangeAlertError as err:
                 self.pressure_change_alert = None
@@ -506,25 +510,34 @@ class PressureChangeAlertError(Exception):
     pass
     
 class PressureChangeAlert:
-    def __init__(self, state_log, duration, target_pressure_change):
+    def __init__(self, state_log, duration, target_pressure_change, required_number_of_samples):
         self.state_log = state_log
+        self.required_number_of_samples = required_number_of_samples
         
         try:
             self.start_time = time.time()
             self.error_time = self.start_time + duration
-            # Find the pressure slope up to this time
-            # TODO This result is only valid if we have more than few samples. There should be a threshold on the number of samples.
-            (self.last_slope, b) = self.state_log.linear_least_squares(start_time = self.start_time - duration)
-            # The target slope is the current slope (which accounts for any current load) plus the required
-            # change in value.
-            self.target_pressure_change = self.last_slope + target_pressure_change
+            # Find the pressure slope before the alert was started
+            (self.historical_slope, b, count) = self.state_log.linear_least_squares(start_time = self.start_time - duration)
+            if count >= required_number_of_samples:
+                # The target slope is the current slope (which accounts for any current load) plus the required
+                # change in value.
+                self.target_pressure_change = self.historical_slope + target_pressure_change
+                print("PressureChangeAlert() historic slope {} calculated with {} samples. Setting target to {}".format(self.historical_slope, count, self.target_pressure_change))
+            else:
+                # There aren't enough historic samples to calculate the current trend. Assume that the current rate of change is 0
+                self.target_pressure_change = target_pressure_change
+                print("PressureChangeAlert() not enough samples to calculate historic slope ({}). Setting target to {}".format(count, self.target_pressure_change))
         except ZeroDivisionError as err:
             print("Zero division calculating linear_least_squares")
             # The current rate of change couldn't be determined. Set the target based on an asumed rate of change of 0
             # (Since the pressure chould not be increasing at the current time, this makes for a stricter requirement,
             # since any loss due to a load will not be included in the target)
             self.target_pressure_change = target_pressure_change
-            self.last_slope = 0
+            self.historical_slope = 0
+            
+        self.max_slope = 0
+        self.min_slope = 0
             
     def update(self):
         current_time = time.time()
@@ -534,14 +547,18 @@ class PressureChangeAlert:
         
         try:
             # Find the pressure slope since the alert was created
-            # TODO This result is only valid if we have more than few samples. There should be a threshold on the number of samples.
-            (self.last_slope, b) = self.state_log.linear_least_squares(start_time = self.start_time)
-            
-            if self.last_slope >= self.target_pressure_change:
-                print("PressureChangeAlert() pressure slope = {} threshold {} reached, cancelling alert".format(self.last_slope, self.target_pressure_change))
-                return True
+            (current_slope, b, count) = self.state_log.linear_least_squares(start_time = self.start_time)
+            if count >= self.required_number_of_samples:
+                self.max_slope = max(self.max_slope, current_slope - self.historical_slope)
+                self.min_slope = min(self.min_slope, current_slope - self.historical_slope)
+                
+                if current_slope >= self.target_pressure_change:
+                    print("PressureChangeAlert() pressure slope = {} ({} samples) threshold {} reached, cancelling alert".format(current_slope, count, self.target_pressure_change))
+                    return True
+                else:
+                    print("PressureChangeAlert() pressure slope = {} ({} samples) threshold {} not reached, continuing to monitor".format(current_slope, count, self.target_pressure_change))
             else:
-                print("PressureChangeAlert() pressure slope = {} threshold {} not reached, continuing to monitor".format(self.last_slope, self.target_pressure_change))
+                print("PressureChangeAlert() only {} samples received, cannot calculate slope".format(count))
         except ZeroDivisionError as err:
             print("Zero division calculating linear_least_squares")
         

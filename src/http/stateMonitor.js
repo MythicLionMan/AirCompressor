@@ -141,11 +141,11 @@ class StateMonitor {
             return Math.round(value * 100).toString() + '%';
         } else if (key == 'tank_pressure' || key == 'line_pressure') {
             return value.toFixed(2);
-        } else if (key == 'pressure_change_trend') {
+        } else if (key == 'max_pressure_change' || key == 'min_pressure_change') {
             if (value == null) {
                 return '';
             } else {
-                return value.toFixed(3);
+                return value.toFixed(1);
             }
         }
         return value;

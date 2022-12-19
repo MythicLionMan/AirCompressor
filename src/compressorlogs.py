@@ -145,7 +145,8 @@ class StateLog(RingLog):
                     data.append([timeX, log[value_index]])
                     
             if len(data) > 1:
-                return linear_least_squares(data)
+                (m, b) = linear_least_squares(data)
+                return (m, b, len(data))
             else:
-                return (0, 0)
+                return (0, 0, len(data))
             
