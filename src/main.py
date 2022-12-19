@@ -103,9 +103,10 @@ class CompressorSettings(Settings):
         self.value_down_button_pin = 13       # Input for value down button to decrement selected value
         
         self.http_root = 'http/'
+        self.watchdog_timeout = 5000;         # Milliseconds to allow between updates before the system is restarted
         
-        self.use_multiple_threads = True
-        #self.debug_mode = debug.DEBUG_WEB_REQUEST | debug.DEBUG_EVENT_LOG | debug.DEBUG_ACTIVITY_LOG | debug.DEBUG_ADC | debug.DEBUG_ADC_SIMULATE
+        self.use_multiple_threads = False
+        #self.debug_mode = debug.DEBUG_COROUTINES | debug.DEBUG_WEB_REQUEST | debug.DEBUG_ADC_SIMULATE #| debug.DEBUG_ADC
         self.debug_mode = debug.DEBUG_NONE
 
     def setup_properties(self, defaults):
@@ -144,7 +145,6 @@ async def main():
     finally:
         # Make sure that any background threads are terminated as well
         [task.stop() for task in tasks]
-        print('Exception raised. Disabling background threads.')
         
     print("WARNING: Foreground coroutines are done.")
 

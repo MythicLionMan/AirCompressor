@@ -447,12 +447,10 @@ class CompressorController:
         if self.drain_solenoid is not None:
             self.drain_solenoid.value(0)
 
-    async def _run_coroutine(self):
-        print("WARNING: No watchdog timer in single thread mode. This is potentially dangerous.")
-
-        self.running = True
+    async def _run_coroutine(self, watchdog):
         try:
-            while self.running:                
+            while self.running:
+                watchdog.feed()                
                 self._update()
                 await asyncio.sleep(self.poll_interval)
         finally:
@@ -460,12 +458,7 @@ class CompressorController:
             
         print("WARNING: Background coroutine loop has finished")
         
-    def _run_thread(self):
-        # Setup a watchdog timer to ensure that the compressor is always updated. If something
-        # steals too many cycles the board will be rebooted rather than risk leaving the compressor
-        # unattended.
-        watchdog = WDT(timeout=5000)
-        self.running = True
+    def _run_thread(self, watchdog):
         if self.settings.debug_mode & debug.DEBUG_THREADS:
             h = HeartbeatMonitor('compressorLoop', self.poll_interval, memory_debug = True, histogram_bin_width = 5)
         
@@ -486,15 +479,18 @@ class CompressorController:
         print("WARNING: Background thread event loop has finished")
          
     def run(self):
+        # Setup a watchdog timer to ensure that the compressor is always updated. If something
+        # steals too many cycles the board will be rebooted rather than risk leaving the compressor
+        # unattended. A reboot will disable the motors until monitoring is resumed.
+        watchdog = WDT(timeout=self.settings.watchdog_timeout)
+        self.running = True
+    
         if self.thread_safe:
             print("Compressor instance is threadsafe. Starting a background thread.")
-            _thread.start_new_thread(self._run_thread, ())
+            _thread.start_new_thread(self._run_thread, (watchdog))
         else:            
-            # Note that no watchdog is created in this case. Unfortunately some of the networking
-            # calls aren't 100% async and may block long enough to allow the interrupt to fire
-            # This makes running in single threaded mode somewhat suspect
             print("Compressor instance is not threadsafe. Running using coroutines.")
-            self.run_task = asyncio.create_task(self._run_coroutine())
+            self.run_task = asyncio.create_task(self._run_coroutine(watchdog))
             
         if self.settings.compressor_on_power_up:
             self.compressor_on()
