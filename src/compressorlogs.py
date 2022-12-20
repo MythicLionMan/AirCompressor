@@ -119,14 +119,29 @@ class StateLog(RingLog):
         self.last_log_time = 0
         self.log_interval = log_interval
         self.console_log = False
+        self._reset_tally()
+        
+    def _reset_tally(self):
+        self.tank_total = 0
+        self.line_total = 0
+        self.delayed_count = 0
     
     def log_state(self, tank_pressure, line_pressure, duty, state):
         now = int(time.time())
         since_last = now - self.last_log_time
-        #print("now = " + str(now) + " since last " + str(since_last) + " Interval " + str(self.log_interval))
+
+        # Update the total of the pressure values
+        self.tank_total = self.tank_total + tank_pressure
+        self.line_total = self.line_total + line_pressure
+        self.delayed_count = self.delayed_count + 1
+        
         if self.log_interval == 0 or since_last > self.log_interval:
             self.last_log_time = now
-            self.log((now, tank_pressure, line_pressure, duty, state))
+            # Store the average of all of the values received since the last log was stored. The state cannot be
+            # averaged, so the current value is stored, and the duty isn't noisy, so the most current value is
+            # stored.
+            self.log((now, self.tank_total/self.delayed_count, self.line_total/self.delayed_count, duty, state))            
+            self._reset_tally()
             
     @property
     def max_duration(self):
