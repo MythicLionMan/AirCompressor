@@ -15,6 +15,7 @@
  * visibleWhenRunPending: Only visible when an ancestor has the run penging class
  * visibleWhenRunning: Only visible when an ancestor has the running class
  * hiddenWhenRunning: Hidden when an ancestor has the running class
+ * hiddenWhenRunningOrOff: Hidden when an ancestor has the running class, the run request class, or the off class
  * visibleWhenOn: Only visible when an ancestor has the compressor on class
  * hiddenWhenOn: Hidden when an ancestor has the compressor on class
  * visibleWhenPurgePending: Only visible when an ancestor has the purge pending class
@@ -25,8 +26,8 @@
  * visibleWhenDutyBlocked: Only visible when an ancestor has the motor_state_duty class
  * visibleWhenPressureChangeError: Only visible when an ancestor has the .pressure_change_error class
  */
-
 .motor_state_run .hiddenWhenRunning, .run_request .hiddenWhenRunning,
+.motor_state_run:not(.compressor_on) .hiddenWhenRunningOrOff, .motor_state_run .hiddenWhenRunningOrOff, .run_request .hiddenWhenRunningOrOff,
 .compressor_on .hiddenWhenOn,
 .purge_open .hiddenWhenPurging, .purge_pending .hiddenWhenPurging {
     display: none;
