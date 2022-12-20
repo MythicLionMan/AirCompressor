@@ -45,10 +45,12 @@ class CompressorController:
     def __init__(self, settings, thread_safe = False):
         self.activity_log = EventLog(thread_safe = thread_safe)
         self.command_log = CommandLog(thread_safe = thread_safe)
-        self.state_log = StateLog(settings, thread_safe = thread_safe)
+        self.state_log = StateLog(settings.log_interval, thread_safe = thread_safe)
+        self.fine_state_log = StateLog(0, size_limit = 10, thread_safe = thread_safe)
 
         self.activity_log.console_log = settings.debug_mode & debug.DEBUG_EVENT_LOG
         self.command_log.console_log = settings.debug_mode & debug.DEBUG_ACTIVITY_LOG
+        self.state_log.console_log = settings.debug_mode & debug.DEBUG_STATE_LOG
 
         self.settings = settings
         self.lock = CondLock(thread_safe)
@@ -312,7 +314,7 @@ class CompressorController:
     def _monitor_for_pressure_change(self):
         pressure_change_duration = self.settings.pressure_change_duration
         if self.pressure_change_alert == None and pressure_change_duration > 0:
-            self.pressure_change_alert = PressureChangeAlert(self.state_log, pressure_change_duration, self.settings.detect_pressure_change_threshold, self.settings.required_number_of_pressure_change_samples, self.settings.debug_mode & debug.DEBUG_PRESSURE_CHANGE)
+            self.pressure_change_alert = PressureChangeAlert(self.fine_state_log, pressure_change_duration, self.settings.detect_pressure_change_threshold, self.settings.required_number_of_pressure_change_samples, self.settings.debug_mode & debug.DEBUG_PRESSURE_CHANGE)
 
     # Clears any conditions or alerts that were set the last time that the compressor ran
     def _clear_conditions(self):
@@ -324,6 +326,20 @@ class CompressorController:
         self.duty_recovery_time = 0
                 
     def _should_pause(self, current_time, max_duty, current_duty):
+        if self.pressure_change_alert:            
+            try:
+                cancel_alert = self.pressure_change_alert.update()
+                
+                self.min_pressure_change = min(self.min_pressure_change, self.pressure_change_alert.min_slope)
+                self.max_pressure_change = max(self.max_pressure_change, self.pressure_change_alert.max_slope)
+                
+                # If the alert has expired, cancel it
+                if cancel_alert:
+                    self.pressure_change_alert = None
+            except PressureChangeAlertError as err:
+                self.pressure_change_alert = None
+                self.pressure_change_error = True
+
         if not self.compressor_is_on:
             # Dont run the motor if the compressor is off (in other words, if it is not maintaining pressure)
             self.request_run_flag = False
@@ -331,20 +347,6 @@ class CompressorController:
         if self.purge_valve_open or self.purge_pending:
             # Dont run the motor if the purge valve is open
             return MOTOR_STATE_PURGE
-
-        if self.pressure_change_alert:            
-            try:
-                # If the alert has expired, cancel it
-                cancel_alert = self.pressure_change_alert.update()
-                
-                self.min_pressure_change = min(self.min_pressure_change, self.pressure_change_alert.min_slope)
-                self.max_pressure_change = max(self.max_pressure_change, self.pressure_change_alert.max_slope)
-                
-                if cancel_alert:
-                    self.pressure_change_alert = None
-            except PressureChangeAlertError as err:
-                self.pressure_change_alert = None
-                self.pressure_change_error = True
                 
         if self.pressure_change_error:
             return MOTOR_STATE_PRESSURE_CHANGE_ERROR
@@ -416,7 +418,10 @@ class CompressorController:
         else:
             current_duty = 0
 
-        self.state_log.log_state(current_pressure, self.line_pressure, current_duty, self._state_string)
+        state_string = self._state_string
+        line_pressure = self.line_pressure
+        self.state_log.log_state(current_pressure, line_pressure, current_duty, state_string)
+        self.fine_state_log.log_state(current_pressure, line_pressure, current_duty, state_string)
         
         # If it is time to close the unload valve do so
         if current_time > self.unload_close_time and self.unload_valve_open:
@@ -429,6 +434,7 @@ class CompressorController:
         # If the pressure limit has been reached turn off request_run,
         # even if the compressor has not run.
         if current_pressure > self.settings.stop_pressure:
+            self.pressure_change_alert = None
             self.request_run_flag = False
 
         # Before controlling the motor check to see if there is a reason that the compressor should be paused

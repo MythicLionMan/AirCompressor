@@ -33,7 +33,7 @@ default_settings = {
     
     "pressure_change_duration": 6,              # Number of seconds to wait for a pressure change before disabling motor
     "detect_pressure_change_threshold": 0.35,   # The change in PSI/s required to determine that the motor is running properly
-    "required_number_of_pressure_change_samples":  3, # The number of samples required in order to calculate the rate of pressure change
+    "required_number_of_pressure_change_samples":  4, # The number of samples required in order to calculate the rate of pressure change
     
     # WiFi configuration
     "ssid": 'A Network',

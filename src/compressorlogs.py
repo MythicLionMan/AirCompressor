@@ -1,4 +1,3 @@
-from settings import Settings
 from ringlog import RingLog
 from linear_least_squares import linear_least_squares
 
@@ -115,23 +114,23 @@ class CommandLog(RingLog):
         self.log((time.time(), event))
 
 class StateLog(RingLog):
-    def __init__(self, settings, thread_safe):
-        RingLog.__init__(self, "Lfff3s", ["time", "tank_pressure", "line_pressure", "duty", "state"], 200, thread_safe = thread_safe)
+    def __init__(self, log_interval, thread_safe, size_limit = 200):
+        RingLog.__init__(self, "Lfff3s", ["time", "tank_pressure", "line_pressure", "duty", "state"], size_limit, thread_safe = thread_safe)
         self.last_log_time = 0
-        self.settings = settings
+        self.log_interval = log_interval
         self.console_log = False
     
     def log_state(self, tank_pressure, line_pressure, duty, state):
         now = int(time.time())
         since_last = now - self.last_log_time
-        #print("now = " + str(now) + " since last " + str(since_last) + " Interval " + str(self.settings.log_interval))
-        if since_last > self.settings.log_interval:
+        #print("now = " + str(now) + " since last " + str(since_last) + " Interval " + str(self.log_interval))
+        if self.log_interval == 0 or since_last > self.log_interval:
             self.last_log_time = now
             self.log((now, tank_pressure, line_pressure, duty, state))
             
     @property
     def max_duration(self):
-        return self.settings.log_interval * self.size_limit
+        return self.log_interval * self.size_limit
         
     def linear_least_squares(self, value_index = 1, start_time = None, end_time = None):
         with self.lock:
