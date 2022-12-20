@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+    <head><title>Air Compressor</title></head>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/1.30.1/date_fns.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/2.0.1/chartjs-plugin-annotation.min.js"></script>
+    <script src="utils.js"></script>
+    <script src="stateMonitor.js"></script>
+    <script src="chartMonitor.js"></script>
+    <script src="pressureGauge.js"></script>
+    <script src="pieChart.js"></script>
+    <script>
+        let stateMonitor = null;
+        let chartMonitor = null;
+        window.onload = function() {{
+            stateMonitor = new StateMonitor('lastUpdateTime', undefined, 'linePressure');
+            chartMonitor = new ChartMonitor('compressorTimeline');
+            stateMonitor.monitor();
+            chartMonitor.monitor();
+            stateMonitor.linePressureGauge.alarmPressure = min_line_pressure;
+        }};
+        // TODO This isn't ideal here. I need the values to be substituted by the server, so they need to be
+        //      in html. But in debug mode they aren't available. A better solution would be to query for
+        //      settings and update the gauges that way. But I don't want to do that until/unless I migrate
+        //      to websockets
+        let min_line_pressure = {min_line_pressure};
+    </script>
+    <body>
+        <div id="dataContainer">
+            <div class="undefined_state" id="statusPanel">
+                <div class='visibleWhenCompressorError' hidden>Warning: server has not responded since <span id='lastUpdateTime'>forever</span></div>
+                <div class='visibleWhenSensorError' hidden>Warning: the tank sensor has returned an invalid value. Check the wiring.</div>
+                <div>
+                    <div id="error_light"></div>
+                </div>
+                <div id="gauges">
+                    <canvas id="linePressure" width="200" height="200"></canvas>
+                </div>
+                <a href="editSettings.html">Edit Settings</a>
+            </div>
+            <div id="compressorTimelineContainer">
+                <canvas id="compressorTimeline"></canvas>
+                <div>
+                    <button onclick="chartMonitor.setChartDurationIndex(0)">Short</button>
+                    <button onclick="chartMonitor.setChartDurationIndex(1)">Medium</button>
+                    <button onclick="chartMonitor.setChartDurationIndex(2)">Long</button>                    
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
+

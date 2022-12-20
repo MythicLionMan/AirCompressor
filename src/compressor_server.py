@@ -14,7 +14,10 @@ class CompressorServer(ServerController):
     def __init__(self, compressor, settings):
         ServerController.__init__(self, settings)
         self.compressor = compressor
-        self.root_document = 'status.html'
+        if settings.compressor_motor_pin is None:
+            self.root_document = 'monitorStatus.html'        
+        else:
+            self.root_document = 'status.html'
         self.log_requests = settings.debug_mode & debug.DEBUG_WEB_REQUEST
     
     # Overloads the base class method to supply state and settings values

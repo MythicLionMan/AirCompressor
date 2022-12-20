@@ -83,7 +83,7 @@ class CompressorSettings(Settings):
         self.tank_pressure_pin = 0       # ADC pin for pressure sensor
         self.line_pressure_pin = None    # ADC pin for pressure sensor
         
-        self.compressor_motor_pin = 15   # Output for compressor relay
+        self.compressor_motor_pin = 15   # Output for compressor relay (Set to None if only pressure monitoring is desired)
         self.unload_solenoid_pin = 14    # Output for unload solenoid
         self.drain_solenoid_pin = 16     # Output for drain solenoid
         
