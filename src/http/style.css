@@ -39,11 +39,13 @@
 .purge_open .visibleWhenPurging,
 .motor_state_duty .visibleWhenDutyBlocked,
 .pause_command_available .visibleWhenPauseAvailable,
-.run_command_available .visibleWhenRunAvailable,
+.run_command_available .visibleWhenRunAvailable {
+    display: inline;
+}
 .motor_state_sensor_error .visibleWhenSensorError,
 .compressor_error .visibleWhenCompressorError,
 .pressure_change_error .visibleWhenPressureChangeError {
-    display: inline;
+    display: block;
 }
 
 .motor_state_duty TR.visibleWhenDutyBlocked,
@@ -65,6 +67,10 @@
 /**
  * Layout
  */
+ .visibleWhenCompressorError, .visibleWhenSensorError, .visibleWhenPressureChangeError {
+    padding: 5px;
+    margin: 5px;
+}
 #dataContainer {
     display: flex;
     flex-flow: row wrap;
@@ -77,9 +83,9 @@
     flex-basis: 60%;
 }
 #statusPanel {
+    width: 400px;
 }
 #gauges {
-    width: 400px;
 }
 #tankPressure, #linePressure {
     width: 200px;
@@ -111,7 +117,16 @@
 .visibleWhenCompressorError, .visibleWhenSensorError, .visibleWhenPressureChangeError {
     color: red;
     font-size: large;
+    border: solid 2px;
+    background: #fee;
+    border-radius: 10px;
 }
+.visibleWhenCompressorError::before, .visibleWhenSensorError::before, .visibleWhenPressureChangeError::before {
+    content: "\26A0 ";
+    font-size: larger;
+    float: left;
+}
+
 /**
  * Status lights
  *
@@ -126,6 +141,7 @@ div#power_light, div#run_light, div#error_light {
     display: inline-block;
     margin-right: 6px;
     margin-left: 6px;
+    margin-top: 10px;
     width: 10px;
     height: 10px;
     border-radius: 50%;
