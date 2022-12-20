@@ -18,6 +18,7 @@ import uasyncio as asyncio
 #       - shows motor status
 #       - on when running
 #       - flashing when pending
+#       - flashing when duty blocked
 #    - purging_status
 #       - shows status of purge valve
 #       - on when open
@@ -25,8 +26,8 @@ import uasyncio as asyncio
 #    - error_status_pin
 #       - shows pressure alerts and errors
 #       - on when tank is underpressure
-#       - flashing when underpressure and duty blocked
 #       - flashing when there is a sensor error
+#       - flashing when there is a pressure change error
 class LEDController:
     def __init__(self, compressor, settings):
         self.settings = settings
@@ -54,21 +55,23 @@ class LEDController:
         flash_time = True if int(time.ticks_ms()/500) & 1 else False
         
         state = self.compressor.state_dictionary
-        motor_state = state['motor_state']
-        motor_running = motor_state == compressor_controller.MOTOR_STATE_RUN
-        pressure_change_error = state['pressure_change_error']
-
-        has_error = state['tank_underpressure'] or state['line_underpressure'] or pressure_change_error
-
-        # Duty errors only matter when the tank is underpressure
-        duty_error = motor_state == compressor_controller.MOTOR_STATE_DUTY and state['tank_underpressure']
-        error_flash = duty_error or state['tank_sensor_error'] or pressure_change_error
+        
+        compressor_on = state['compressor_on']
+        
+        purge_open = state['purge_open']
+        purge_pending = state['purge_pending']
+        
+        motor_running = state['motor_state'] == compressor_controller.MOTOR_STATE_RUN
+        motor_pending = state['run_request']
+        
+        pressure_error = state['tank_underpressure'] or state['line_underpressure']
+        critical_error = state['tank_sensor_error'] or state['pressure_change_error']
                 
-        self._update_pin(self.compressor_on_status, state['compressor_on'])
-        self._update_pin(self.compressor_on_status2, state['compressor_on'])
-        self._update_pin(self.error_status, has_error, error_flash, flash_time)
-        self._update_pin(self.motor_status, motor_running, state['run_request'], flash_time)
-        self._update_pin(self.purge_status, state['purge_open'], state['purge_pending'], flash_time)
+        self._update_pin(self.compressor_on_status, compressor_on)
+        self._update_pin(self.compressor_on_status2, compressor_on)
+        self._update_pin(self.error_status, pressure_error, critical_error, flash_time)
+        self._update_pin(self.motor_status, motor_running, motor_pending, flash_time)
+        self._update_pin(self.purge_status, purge_open, purge_pending, flash_time)
     
     async def _run(self):
         self.running = True
