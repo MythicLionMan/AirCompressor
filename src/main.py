@@ -89,7 +89,7 @@ class CompressorSettings(Settings):
         
         self.status_poll_interval = 250       # Update interval for status LEDs
         self.compressor_on_status_pin = 2     # Output for power LED (indicates that pressure is being regulated)
-        self.compressor_on_status_pin2 = 25   # Output for secondary power LED
+        self.compressor_on_status_pin2 = "LED" # Output for secondary power LED
         self.error_status_pin = 5             # Output for error LED
         self.compressor_motor_status_pin = 4  # Output for compressor motor status LED
         self.purge_status_pin = 3             # Output for purge solenoid status LED

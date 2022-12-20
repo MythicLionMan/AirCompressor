@@ -33,16 +33,13 @@ class LEDController:
         self.settings = settings
         self.compressor = compressor
         
-        self.compressor_on_status = machine.Pin(settings.compressor_on_status_pin, machine.Pin.OUT)
-        if settings.compressor_on_status_pin2 is not None:
-            self.compressor_on_status2 = machine.Pin(settings.compressor_on_status_pin2, machine.Pin.OUT)
-        else:
-            self.compressor_on_status2 = None
+        self.compressor_on_status = machine.Pin(settings.compressor_on_status_pin, machine.Pin.OUT) if settings.compressor_on_status_pin is not None else None
+        self.compressor_on_status2 = machine.Pin(settings.compressor_on_status_pin2, machine.Pin.OUT) if settings.compressor_on_status_pin2 is not None else None
             
-        self.error_status = machine.Pin(settings.error_status_pin, machine.Pin.OUT)
+        self.error_status = machine.Pin(settings.error_status_pin, machine.Pin.OUT) if settings.error_status_pin is not None else None
 
-        self.motor_status = machine.Pin(settings.compressor_motor_status_pin, machine.Pin.OUT)
-        self.purge_status = machine.Pin(settings.purge_status_pin, machine.Pin.OUT)
+        self.motor_status = machine.Pin(settings.compressor_motor_status_pin, machine.Pin.OUT) if settings.compressor_motor_status_pin is not None else None
+        self.purge_status = machine.Pin(settings.purge_status_pin, machine.Pin.OUT) if settings.purge_status_pin is not None else None
     
     def _update_pin(self, pin, on, flashing = False, flash_state = False):
         if pin is not None:
@@ -80,7 +77,9 @@ class LEDController:
         # Updating the status may take a different amount of time if other
         # coroutines block us. It isn't critical, but it's preferrable if
         # status updates occur at a fixed frequency (so that the leds flash
-        # regularly). So instead of napping for the time between updates 
+        # regularly). So instead of napping for the time between updates,
+        # subtract the time that has elapsed since the last update was supposed
+        # to happen
         next_update_time = time.ticks_add(time.ticks_ms(), status_poll_interval)
         while self.running:
             self._update_status()
